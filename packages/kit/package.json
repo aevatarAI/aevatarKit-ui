@@ -1,0 +1,60 @@
+{
+  "name": "@aevatar/kit",
+  "version": "0.1.0",
+  "description": "AevatarKit SDK - Complete TypeScript SDK for Aevatar Agent Framework",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@aevatar/kit-types": "workspace:*",
+    "@aevatar/kit-protocol": "workspace:*",
+    "@aevatar/kit-core": "workspace:*",
+    "@aevatar/kit-react": "workspace:*",
+    "@aevatar/kit-a2ui": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "react": "^18.2.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "aevatar",
+    "agent",
+    "ai",
+    "ag-ui",
+    "sdk",
+    "react"
+  ]
+}
+

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AevatarKit Minimal Demo</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      
+      body {
+        font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+        background: #0a0a0a;
+        color: #e0e0e0;
+        padding: 24px;
+        line-height: 1.6;
+      }
+      
+      h1 {
+        color: #818cf8;
+        margin-bottom: 24px;
+        font-size: 1.5rem;
+      }
+      
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+      }
+      
+      .section {
+        margin-bottom: 24px;
+        padding: 16px;
+        background: #1a1a1a;
+        border-radius: 8px;
+        border: 1px solid #333;
+      }
+      
+      .section h2 {
+        font-size: 0.875rem;
+        color: #888;
+        margin-bottom: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      
+      #status {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+      }
+      
+      #status.connected { background: #22c55e33; color: #22c55e; }
+      #status.connecting { background: #f59e0b33; color: #f59e0b; }
+      #status.disconnected { background: #ef444433; color: #ef4444; }
+      
+      .input-group {
+        display: flex;
+        gap: 8px;
+      }
+      
+      input {
+        flex: 1;
+        padding: 12px 16px;
+        background: #0a0a0a;
+        border: 1px solid #333;
+        border-radius: 6px;
+        color: #e0e0e0;
+        font-family: inherit;
+        font-size: 0.875rem;
+      }
+      
+      input:focus {
+        outline: none;
+        border-color: #818cf8;
+      }
+      
+      button {
+        padding: 12px 24px;
+        background: #818cf8;
+        border: none;
+        border-radius: 6px;
+        color: white;
+        font-family: inherit;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      
+      button:hover { background: #6366f1; }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
+      
+      #messages {
+        max-height: 300px;
+        overflow-y: auto;
+        font-size: 0.875rem;
+      }
+      
+      .message {
+        padding: 8px 12px;
+        margin-bottom: 8px;
+        border-radius: 6px;
+      }
+      
+      .message.user {
+        background: #818cf833;
+        border-left: 3px solid #818cf8;
+      }
+      
+      .message.assistant {
+        background: #22c55e1a;
+        border-left: 3px solid #22c55e;
+      }
+      
+      .message .role {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        color: #888;
+        margin-bottom: 4px;
+      }
+      
+      #events {
+        max-height: 200px;
+        overflow-y: auto;
+        font-size: 0.75rem;
+      }
+      
+      .event {
+        padding: 4px 8px;
+        margin-bottom: 4px;
+        background: #0a0a0a;
+        border-radius: 4px;
+        display: flex;
+        justify-content: space-between;
+      }
+      
+      .event-type { color: #818cf8; }
+      .event-time { color: #666; }
+      
+      .streaming {
+        animation: pulse 1s infinite;
+      }
+      
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>⚡ AevatarKit Minimal Demo</h1>
+      
+      <div class="section">
+        <h2>Connection</h2>
+        <span id="status" class="disconnected">Disconnected</span>
+      </div>
+      
+      <div class="section">
+        <h2>Chat</h2>
+        <div class="input-group">
+          <input type="text" id="input" placeholder="Type a message..." />
+          <button id="send" disabled>Send</button>
+        </div>
+      </div>
+      
+      <div class="section">
+        <h2>Messages</h2>
+        <div id="messages"></div>
+      </div>
+      
+      <div class="section">
+        <h2>Events</h2>
+        <div id="events"></div>
+      </div>
+    </div>
+    
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
+

@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "allowSyntheticDefaultImports": true,
+    "paths": {
+      "@aevatar/kit": ["./packages/kit/src"],
+      "@aevatar/kit-types": ["./packages/kit-types/src"],
+      "@aevatar/kit-protocol": ["./packages/kit-protocol/src"],
+      "@aevatar/kit-core": ["./packages/kit-core/src"],
+      "@aevatar/kit-react": ["./packages/kit-react/src"]
+    }
+  },
+  "exclude": ["node_modules", "dist", "coverage"]
+}
+

@@ -1,0 +1,99 @@
+# ============================================
+# Dependencies
+# ============================================
+node_modules/
+.pnpm-store/
+
+# ============================================
+# Build Outputs
+# ============================================
+dist/
+build/
+out/
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# ============================================
+# Vite / Bundler Cache
+# ============================================
+.vite/
+.cache/
+.parcel-cache/
+.turbo/
+
+# ============================================
+# Test & Coverage
+# ============================================
+coverage/
+.nyc_output/
+*.lcov
+vitest.config.*.timestamp-*
+
+# ============================================
+# IDE & Editor
+# ============================================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# ============================================
+# OS Generated
+# ============================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ============================================
+# Environment & Secrets
+# ============================================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.secrets
+
+# ============================================
+# Logs & Debug
+# ============================================
+*.log
+logs/
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# ============================================
+# Temporary Files
+# ============================================
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+
+# ============================================
+# Lint & Format Cache
+# ============================================
+.eslintcache
+.stylelintcache
+.prettiercache
+
+# ============================================
+# Misc
+# ============================================
+*.local
+.npmrc.local
+.yarnrc.local
