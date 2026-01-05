@@ -11,6 +11,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import type { CustomEvent, A2uiUserAction } from '@aevatar/kit-types';
+import { A2UI_CUSTOM_EVENT_NAME } from '@aevatar/kit-types';
 import {
   createA2uiEngine,
   type A2uiEngine,
@@ -19,6 +20,7 @@ import {
   type DataChangeEvent,
   type A2uiEngineOptions,
 } from '@aevatar/kit-a2ui';
+import { createEventStream, type EventStream, type StreamStatus } from '@aevatar/kit-protocol';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -188,7 +190,7 @@ export function useA2uiData<T = unknown>(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * 获取特定 Surface 的状态
+ * 获取特定 Surface 的状态 (事件驱动)
  */
 export function useA2uiSurface(
   engine: A2uiEngine<ReactNode>,
@@ -197,19 +199,264 @@ export function useA2uiSurface(
   const [surface, setSurface] = useState(() => engine.getSurface(surfaceId));
 
   useEffect(() => {
-    // 简单轮询检查 surface 状态变化
-    // 在生产环境中可以改为事件驱动
-    const interval = setInterval(() => {
-      const newSurface = engine.getSurface(surfaceId);
-      if (newSurface !== surface) {
-        setSurface(newSurface);
-      }
-    }, 100);
+    // 初始化
+    setSurface(engine.getSurface(surfaceId));
 
-    return () => clearInterval(interval);
-  }, [engine, surfaceId, surface]);
+    // 订阅数据变更来触发 surface 更新
+    const unsubscribe = engine.getDataModel().subscribe(() => {
+      const newSurface = engine.getSurface(surfaceId);
+      setSurface(newSurface);
+    });
+
+    return unsubscribe;
+  }, [engine, surfaceId]);
 
   return surface;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// useA2uiStream Hook
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * SSE 流配置选项
+ */
+export interface UseA2uiStreamOptions extends UseA2uiOptions {
+  /** 是否自动连接 (默认 true) */
+  autoConnect?: boolean;
+  /** 自动重连 (默认 true) */
+  autoReconnect?: boolean;
+  /** 重连延迟 (ms, 默认 1000) */
+  reconnectDelayMs?: number;
+  /** 最大重连次数 (默认 10) */
+  maxReconnectAttempts?: number;
+  /** 自定义 headers (通过 query params 传递) */
+  headers?: Record<string, string>;
+  /** 连接状态变更回调 */
+  onStatusChange?: (status: StreamStatus) => void;
+  /** 连接错误回调 */
+  onStreamError?: (error: Error) => void;
+}
+
+/**
+ * useA2uiStream 返回值
+ */
+export interface UseA2uiStreamResult extends UseA2uiResult {
+  /** SSE 连接状态 */
+  status: StreamStatus;
+  /** 是否已连接 */
+  isConnected: boolean;
+  /** 是否正在连接 */
+  isConnecting: boolean;
+  /** 连接错误 */
+  error: Error | null;
+  /** 手动连接 */
+  connect: () => void;
+  /** 手动断开 */
+  disconnect: () => void;
+  /** 强制重连 */
+  reconnect: () => void;
+}
+
+/**
+ * A2UI 流式 Hook - SSE 连接 + A2UI 引擎一体化
+ * 
+ * 开箱即用地将 SSE 事件流与 A2UI 引擎集成
+ * 
+ * @param url - SSE 端点 URL (null 时不连接)
+ * @param registry - 组件注册表
+ * @param options - 配置选项
+ * 
+ * @example
+ * ```tsx
+ * const registry = createStandardRegistry();
+ * 
+ * function App() {
+ *   const { 
+ *     tree, 
+ *     status, 
+ *     isConnected,
+ *     dispatchUserAction 
+ *   } = useA2uiStream('/api/agent/events', registry, {
+ *     onUserAction: (action) => {
+ *       // 发送用户操作到服务端
+ *       fetch('/api/agent/action', {
+ *         method: 'POST',
+ *         body: JSON.stringify({ userAction: action }),
+ *       });
+ *     },
+ *   });
+ * 
+ *   if (!isConnected) return <div>连接中...</div>;
+ *   if (!tree) return <div>等待 Agent 响应...</div>;
+ * 
+ *   return <A2uiRenderer tree={tree} registry={registry} />;
+ * }
+ * ```
+ */
+export function useA2uiStream(
+  url: string | null,
+  registry: A2uiComponentRegistry<ReactNode>,
+  options: UseA2uiStreamOptions = {}
+): UseA2uiStreamResult {
+  const {
+    // A2UI options
+    surfaceId = 'default',
+    onDataChange,
+    onUserAction,
+    onError,
+    // Stream options
+    autoConnect = true,
+    autoReconnect = true,
+    reconnectDelayMs = 1000,
+    maxReconnectAttempts = 10,
+    headers,
+    onStatusChange,
+    onStreamError,
+  } = options;
+
+  // A2UI 核心 Hook
+  const a2ui = useA2ui(registry, {
+    surfaceId,
+    onDataChange,
+    onUserAction,
+    onError,
+  });
+
+  // Stream 状态
+  const [status, setStatus] = useState<StreamStatus>('disconnected');
+  const [error, setError] = useState<Error | null>(null);
+  
+  // Stream 引用
+  const streamRef = useRef<EventStream | null>(null);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
+
+  // Refs for callbacks
+  const onStatusChangeRef = useRef(onStatusChange);
+  const onStreamErrorRef = useRef(onStreamError);
+  
+  useEffect(() => {
+    onStatusChangeRef.current = onStatusChange;
+    onStreamErrorRef.current = onStreamError;
+  }, [onStatusChange, onStreamError]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Stream Management
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const connect = useCallback(() => {
+    if (!url) return;
+    
+    // 清理旧连接
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+      unsubscribeRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.disconnect();
+    }
+
+    setError(null);
+
+    // 创建新的事件流
+    const stream = createEventStream({
+      url,
+      autoReconnect,
+      reconnectDelayMs,
+      maxReconnectAttempts,
+      headers,
+      onStatusChange: (newStatus) => {
+        setStatus(newStatus);
+        onStatusChangeRef.current?.(newStatus);
+      },
+      onError: (err) => {
+        setError(err);
+        onStreamErrorRef.current?.(err);
+      },
+    });
+
+    streamRef.current = stream;
+
+    // 订阅 A2UI 事件
+    const unsubscribeA2ui = stream.onCustom(A2UI_CUSTOM_EVENT_NAME, (event) => {
+      a2ui.processEvent(event);
+    });
+
+    // 也订阅所有 CUSTOM 事件作为后备 (兼容不同的服务端实现)
+    const unsubscribeCustom = stream.on('CUSTOM', (event) => {
+      // 只处理 A2UI 相关的事件
+      if (event.name === A2UI_CUSTOM_EVENT_NAME) {
+        a2ui.processEvent(event);
+      }
+    });
+
+    unsubscribeRef.current = () => {
+      unsubscribeA2ui();
+      unsubscribeCustom();
+    };
+
+    // 连接
+    stream.connect();
+  }, [url, autoReconnect, reconnectDelayMs, maxReconnectAttempts, headers, a2ui]);
+
+  const disconnect = useCallback(() => {
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+      unsubscribeRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.disconnect();
+      streamRef.current = null;
+    }
+    setStatus('disconnected');
+  }, []);
+
+  const reconnect = useCallback(() => {
+    disconnect();
+    connect();
+  }, [disconnect, connect]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Lifecycle
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // 自动连接
+  useEffect(() => {
+    if (autoConnect && url) {
+      connect();
+    }
+
+    return () => {
+      disconnect();
+    };
+  }, [url, autoConnect]); // 注意：不包含 connect/disconnect 避免循环
+
+  // URL 变更时重连
+  useEffect(() => {
+    if (url && streamRef.current && status === 'connected') {
+      reconnect();
+    }
+  }, [url]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Computed Values
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const isConnected = status === 'connected';
+  const isConnecting = status === 'connecting' || status === 'reconnecting';
+
+  return {
+    // A2UI results
+    ...a2ui,
+    // Stream results
+    status,
+    isConnected,
+    isConnecting,
+    error,
+    connect,
+    disconnect,
+    reconnect,
+  };
 }
 
 

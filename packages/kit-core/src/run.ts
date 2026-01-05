@@ -3,6 +3,7 @@
  * Run Manager
  * ============================================================================
  * Manages run execution and lifecycle
+ * Uses BackendAdapter for backend communication
  * ============================================================================
  */
 
@@ -15,6 +16,7 @@ import type {
   AgUiEvent,
   Unsubscribe,
 } from '@aevatar/kit-types';
+import type { BackendAdapter } from './adapter';
 import type { Logger } from './utils/logger';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -22,9 +24,16 @@ import type { Logger } from './utils/logger';
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface RunManagerOptions {
-  baseUrl: string;
+  /** Backend adapter */
+  adapter: BackendAdapter;
+
+  /** API key for authentication */
   apiKey?: string;
+
+  /** Session ID this run belongs to */
   sessionId: string;
+
+  /** Logger instance */
   logger: Logger;
 }
 
@@ -87,35 +96,18 @@ export interface RunInstance {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function createRunManager(options: RunManagerOptions): RunManager {
-  const { baseUrl, apiKey, sessionId, logger } = options;
+  const { adapter, sessionId, logger } = options;
 
   async function start(input?: RunInput): Promise<RunInstance> {
-    const response = await fetch(`${baseUrl}/api/sessions/${sessionId}/runs`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-      },
-      body: JSON.stringify(input ?? {}),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to start run: ${response.statusText}`);
-    }
-
-    const runData = await response.json() as Run;
-    logger.info('Run started', { runId: runData.id, sessionId });
+    // Delegate to adapter
+    const runData = await adapter.startRun(sessionId, input);
+    logger.info('Run started', { runId: runData.id, sessionId, adapter: adapter.name });
     
-    return createRunInstance(runData, { baseUrl, apiKey, logger });
+    return createRunInstance(runData, { adapter, logger });
   }
 
   async function get(runId: string): Promise<Run | null> {
-    const response = await fetch(`${baseUrl}/api/runs/${runId}`, {
-      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
-    });
-
-    if (!response.ok) return null;
-    return response.json() as Promise<Run>;
+    return adapter.getRun(runId);
   }
 
   return { start, get };
@@ -126,13 +118,15 @@ export function createRunManager(options: RunManagerOptions): RunManager {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface RunInstanceOptions {
-  baseUrl: string;
-  apiKey?: string;
+  /** Backend adapter */
+  adapter: BackendAdapter;
+
+  /** Logger instance */
   logger: Logger;
 }
 
 function createRunInstance(data: Run, options: RunInstanceOptions): RunInstance {
-  const { baseUrl, apiKey, logger } = options;
+  const { adapter, logger } = options;
   
   const steps: StepInfo[] = [...(data.steps ?? [])];
   const stepListeners = new Set<(step: StepInfo) => void>();
@@ -174,10 +168,8 @@ function createRunInstance(data: Run, options: RunInstanceOptions): RunInstance 
   // ───────────────────────────────────────────────────────────────────────────
 
   async function stop(): Promise<void> {
-    await fetch(`${baseUrl}/api/runs/${data.id}/stop`, {
-      method: 'POST',
-      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
-    });
+    // Delegate to adapter
+    await adapter.stopRun(data.id);
     setStatus('cancelled');
     logger.info('Run stopped', { runId: data.id });
   }
@@ -185,18 +177,14 @@ function createRunInstance(data: Run, options: RunInstanceOptions): RunInstance 
   async function wait(): Promise<Run> {
     return new Promise((resolve, reject) => {
       const checkInterval = setInterval(async () => {
-        const response = await fetch(`${baseUrl}/api/runs/${data.id}`, {
-          headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
-        });
+        const runData = await adapter.getRun(data.id);
 
-        if (!response.ok) {
+        if (!runData) {
           clearInterval(checkInterval);
           reject(new Error('Failed to fetch run status'));
           return;
         }
 
-        const runData = await response.json() as Run;
-        
         if (runData.status === 'completed' || runData.status === 'failed' || runData.status === 'cancelled') {
           clearInterval(checkInterval);
           status = runData.status;

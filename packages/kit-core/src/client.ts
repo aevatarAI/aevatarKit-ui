@@ -3,6 +3,11 @@
  * Aevatar Client
  * ============================================================================
  * Main entry point for AevatarKit SDK
+ * 
+ * Features:
+ * - Adapter pattern for backend flexibility
+ * - Connection management
+ * - Session/Run/Agent/Graph/Memory APIs
  * ============================================================================
  */
 
@@ -23,11 +28,21 @@ import type {
   MemorySearchResult,
   Unsubscribe,
 } from '@aevatar/kit-types';
+import { type BackendAdapter, createDefaultAdapter } from './adapter';
 import { createSessionManager, type SessionManager, type SessionInstance } from './session';
 import { createLogger, type Logger } from './utils/logger';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Types
+// Extended Client Options
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AevatarClientOptions extends ClientOptions {
+  /** Custom backend adapter (optional, uses default if not provided) */
+  adapter?: BackendAdapter;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Client Interface
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface AevatarClient {
@@ -36,6 +51,9 @@ export interface AevatarClient {
   
   /** Connection status */
   readonly status: ConnectionStatus;
+
+  /** Backend adapter in use */
+  readonly adapter: BackendAdapter;
   
   // ─────────────────────────────────────────────────────────────────────────
   // Connection
@@ -111,12 +129,19 @@ export interface AevatarClient {
 // Implementation
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function createAevatarClient(options: ClientOptions): AevatarClient {
+export function createAevatarClient(options: AevatarClientOptions): AevatarClient {
   const { baseUrl, apiKey, timeout = 30000 } = options;
   
   const logger: Logger = createLogger(options.logger);
   const statusListeners = new Set<(status: ConnectionStatus) => void>();
   
+  // Create adapter - use provided or default
+  const adapter: BackendAdapter = options.adapter ?? createDefaultAdapter({
+    baseUrl,
+    apiKey,
+    timeout,
+  });
+
   let currentStatus: ConnectionStatus = 'disconnected';
   let sessionManager: SessionManager | null = null;
 
@@ -132,34 +157,6 @@ export function createAevatarClient(options: ClientOptions): AevatarClient {
     }
   }
 
-  async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> {
-    const url = `${baseUrl}${path}`;
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-      ...(init?.headers as Record<string, string> ?? {}),
-    };
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-    try {
-      const response = await fetch(url, {
-        ...init,
-        headers,
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status} ${response.statusText}`);
-      }
-
-      return await response.json() as T;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
   // ───────────────────────────────────────────────────────────────────────────
   // Public API
   // ───────────────────────────────────────────────────────────────────────────
@@ -168,13 +165,17 @@ export function createAevatarClient(options: ClientOptions): AevatarClient {
     setStatus('connecting');
     
     try {
-      // Health check
-      await fetchApi('/api/health');
+      // Health check via adapter
+      await adapter.healthCheck();
       
-      sessionManager = createSessionManager({ baseUrl, apiKey, logger });
+      // Create session manager with adapter
+      sessionManager = createSessionManager({ adapter, apiKey, logger });
       setStatus('connected');
       
-      logger.info('Connected to Aevatar backend', { baseUrl });
+      logger.info('Connected to Aevatar backend', { 
+        baseUrl, 
+        adapter: adapter.name,
+      });
     } catch (error) {
       setStatus('error');
       logger.error('Failed to connect', { error });
@@ -193,62 +194,84 @@ export function createAevatarClient(options: ClientOptions): AevatarClient {
     return () => statusListeners.delete(callback);
   }
 
-  // Session methods
+  // ─────────────────────────────────────────────────────────────────────────
+  // Session Methods - Delegated to Adapter
+  // ─────────────────────────────────────────────────────────────────────────
+
   async function createSession(opts?: CreateSessionOptions): Promise<SessionInstance> {
     if (!sessionManager) throw new Error('Not connected');
     return sessionManager.create(opts);
   }
 
   async function getSession(sessionId: string): Promise<Session | null> {
-    return fetchApi<Session>(`/api/sessions/${sessionId}`).catch(() => null);
+    return adapter.getSession(sessionId);
   }
 
   async function listSessions(): Promise<SessionSummary[]> {
-    return fetchApi<SessionSummary[]>('/api/sessions');
+    return adapter.listSessions();
   }
 
   async function deleteSession(sessionId: string): Promise<void> {
-    await fetchApi(`/api/sessions/${sessionId}`, { method: 'DELETE' });
+    return adapter.deleteSession(sessionId);
   }
 
-  // Run methods
+  // ─────────────────────────────────────────────────────────────────────────
+  // Run Methods - Delegated to Adapter
+  // ─────────────────────────────────────────────────────────────────────────
+
   async function getRun(runId: string): Promise<Run | null> {
-    return fetchApi<Run>(`/api/runs/${runId}`).catch(() => null);
+    return adapter.getRun(runId);
   }
 
   async function listRuns(sessionId: string): Promise<RunSummary[]> {
-    return fetchApi<RunSummary[]>(`/api/sessions/${sessionId}/runs`);
+    return adapter.listRuns(sessionId);
   }
 
-  // Agent methods
+  // ─────────────────────────────────────────────────────────────────────────
+  // Agent Methods - Delegated to Adapter (Optional)
+  // ─────────────────────────────────────────────────────────────────────────
+
   async function getAgent(agentId: string): Promise<AgentInfo | null> {
-    return fetchApi<AgentInfo>(`/api/agents/${agentId}`).catch(() => null);
+    if (!adapter.getAgent) return null;
+    return adapter.getAgent(agentId);
   }
 
   async function listAgents(): Promise<AgentSummary[]> {
-    return fetchApi<AgentSummary[]>('/api/agents');
+    if (!adapter.listAgents) return [];
+    return adapter.listAgents();
   }
 
-  // Graph methods
+  // ─────────────────────────────────────────────────────────────────────────
+  // Graph Methods - Delegated to Adapter (Optional)
+  // ─────────────────────────────────────────────────────────────────────────
+
   async function getGraph(graphId: string): Promise<GraphDefinition | null> {
-    return fetchApi<GraphDefinition>(`/api/graphs/${graphId}`).catch(() => null);
+    if (!adapter.getGraph) return null;
+    return adapter.getGraph(graphId);
   }
 
   async function listGraphs(): Promise<GraphSummary[]> {
-    return fetchApi<GraphSummary[]>('/api/graphs');
+    if (!adapter.listGraphs) return [];
+    return adapter.listGraphs();
   }
 
-  // Memory methods
+  // ─────────────────────────────────────────────────────────────────────────
+  // Memory Methods - Delegated to Adapter (Optional)
+  // ─────────────────────────────────────────────────────────────────────────
+
   async function getMemory(memoryId: string): Promise<Memory | null> {
-    return fetchApi<Memory>(`/api/memory/${memoryId}`).catch(() => null);
+    if (!adapter.getMemory) return null;
+    return adapter.getMemory(memoryId);
   }
 
   async function searchMemory(searchOptions: MemorySearchOptions): Promise<MemorySearchResult[]> {
-    return fetchApi<MemorySearchResult[]>('/api/memory/search', {
-      method: 'POST',
-      body: JSON.stringify(searchOptions),
-    });
+    if (!adapter.searchMemory) return [];
+    return adapter.searchMemory(searchOptions);
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Return Client Instance
+  // ─────────────────────────────────────────────────────────────────────────
 
   return {
     get baseUrl() {
@@ -256,6 +279,9 @@ export function createAevatarClient(options: ClientOptions): AevatarClient {
     },
     get status() {
       return currentStatus;
+    },
+    get adapter() {
+      return adapter;
     },
     connect,
     disconnect,

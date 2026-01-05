@@ -6,6 +6,7 @@
  * 
  * This package provides:
  * - AevatarClient for connecting to Aevatar backend
+ * - Backend adapter pattern for flexibility
  * - Session management
  * - Run execution
  * - State management
@@ -15,7 +16,27 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Client
 // ─────────────────────────────────────────────────────────────────────────────
-export { createAevatarClient, type AevatarClient } from './client';
+export { createAevatarClient, type AevatarClient, type AevatarClientOptions } from './client';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Backend Adapter
+// ─────────────────────────────────────────────────────────────────────────────
+export {
+  type BackendAdapter,
+  type AdapterOptions,
+  createDefaultAdapter,
+  createFetchHelper,
+} from './adapter';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pre-built Adapters
+// ─────────────────────────────────────────────────────────────────────────────
+export {
+  createAxiomAdapter,
+  type AxiomAdapterOptions,
+  type AxiomSessionOptions,
+  type AxiomDefinition,
+} from './adapters/index';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Session

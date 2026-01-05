@@ -43,8 +43,11 @@ export {
   useA2ui,
   useA2uiData,
   useA2uiSurface,
+  useA2uiStream,
   type UseA2uiOptions,
   type UseA2uiResult,
+  type UseA2uiStreamOptions,
+  type UseA2uiStreamResult,
 } from './useA2ui';
 
 // ─────────────────────────────────────────────────────────────────────────────

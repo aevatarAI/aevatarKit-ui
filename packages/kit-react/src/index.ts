@@ -27,6 +27,13 @@ export { useEventStream, type UseEventStreamResult } from './hooks/useEventStrea
 export { useMessages, type UseMessagesResult } from './hooks/useMessages';
 export { useProgress, type UseProgressResult } from './hooks/useProgress';
 export { useConnection, type UseConnectionResult } from './hooks/useConnection';
+export { 
+  useToolCalls, 
+  type UseToolCallsResult, 
+  type UseToolCallsOptions,
+  type ToolCallState,
+  type ToolCallStatus,
+} from './hooks/useToolCalls';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Components - Chat
@@ -49,6 +56,14 @@ export { StreamingText, type StreamingTextProps } from './components/timeline/St
 export { LoadingSpinner, type LoadingSpinnerProps } from './components/common/LoadingSpinner';
 export { ConnectionStatus, type ConnectionStatusProps } from './components/common/ConnectionStatus';
 export { ProgressBar, type ProgressBarProps } from './components/common/ProgressBar';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Components - Tool Call
+// ─────────────────────────────────────────────────────────────────────────────
+export { ToolCallCard, type ToolCallCardProps } from './components/toolcall/ToolCallCard';
+export { ToolCallList, type ToolCallListProps } from './components/toolcall/ToolCallList';
+export { ToolCallBadge, type ToolCallBadgeProps } from './components/toolcall/ToolCallBadge';
+export { ToolCallPanel, type ToolCallPanelProps } from './components/toolcall/ToolCallPanel';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // A2UI (Agent-to-User Interface)

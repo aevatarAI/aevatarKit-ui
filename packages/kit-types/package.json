@@ -1,6 +1,6 @@
 {
   "name": "@aevatar/kit-types",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Type definitions for AevatarKit SDK",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -12,7 +12,9 @@
       "require": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -23,8 +25,20 @@
     "tsup": "^8.0.0",
     "typescript": "^5.3.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aevatar/aevatarkit-ui.git",
+    "directory": "packages/kit-types"
+  },
+  "homepage": "https://github.com/aevatar/aevatarkit-ui#readme",
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "keywords": [
+    "aevatar",
+    "types",
+    "typescript",
+    "ag-ui",
+    "a2ui"
+  ]
 }
-

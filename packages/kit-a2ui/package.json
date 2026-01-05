@@ -1,6 +1,6 @@
 {
   "name": "@aevatar/kit-a2ui",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A2UI (Agent-to-User Interface) engine for AevatarKit SDK",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -12,7 +12,9 @@
       "require": "./dist/index.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -29,8 +31,20 @@
     "typescript": "^5.3.0",
     "vitest": "^1.0.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aevatar/aevatarkit-ui.git",
+    "directory": "packages/kit-a2ui"
+  },
+  "homepage": "https://github.com/aevatar/aevatarkit-ui#readme",
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "keywords": [
+    "aevatar",
+    "a2ui",
+    "google",
+    "agent-ui",
+    "declarative"
+  ]
 }
-

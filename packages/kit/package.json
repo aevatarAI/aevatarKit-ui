@@ -1,6 +1,6 @@
 {
   "name": "@aevatar/kit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "AevatarKit SDK - Complete TypeScript SDK for Aevatar Agent Framework",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -13,7 +13,9 @@
     },
     "./styles.css": "./dist/styles.css"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -45,6 +47,15 @@
     "tsup": "^8.0.0",
     "typescript": "^5.3.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aevatar/aevatarkit-ui.git",
+    "directory": "packages/kit"
+  },
+  "homepage": "https://github.com/aevatar/aevatarkit-ui#readme",
+  "bugs": {
+    "url": "https://github.com/aevatar/aevatarkit-ui/issues"
+  },
   "publishConfig": {
     "access": "public"
   },
@@ -57,4 +68,3 @@
     "react"
   ]
 }
-

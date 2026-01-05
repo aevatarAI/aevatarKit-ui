@@ -3,6 +3,7 @@
  * Session Manager
  * ============================================================================
  * Manages session lifecycle and state
+ * Uses BackendAdapter for backend communication
  * ============================================================================
  */
 
@@ -17,6 +18,7 @@ import type {
   Unsubscribe,
 } from '@aevatar/kit-types';
 import { createEventStream, type EventStream } from '@aevatar/kit-protocol';
+import type { BackendAdapter } from './adapter';
 import { createRunManager, type RunInstance } from './run';
 import { createStateStore, type StateStore } from './state';
 import type { Logger } from './utils/logger';
@@ -26,8 +28,13 @@ import type { Logger } from './utils/logger';
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface SessionManagerOptions {
-  baseUrl: string;
+  /** Backend adapter */
+  adapter: BackendAdapter;
+
+  /** API key for SSE authentication */
   apiKey?: string;
+
+  /** Logger instance */
   logger: Logger;
 }
 
@@ -96,28 +103,16 @@ export interface SessionInstance {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function createSessionManager(options: SessionManagerOptions): SessionManager {
-  const { baseUrl, apiKey, logger } = options;
+  const { adapter, apiKey, logger } = options;
   const sessions = new Map<string, SessionInstance>();
 
   async function create(opts?: CreateSessionOptions): Promise<SessionInstance> {
-    const response = await fetch(`${baseUrl}/api/sessions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-      },
-      body: JSON.stringify(opts ?? {}),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to create session: ${response.statusText}`);
-    }
-
-    const sessionData = await response.json() as Session;
-    const instance = createSessionInstance(sessionData, { baseUrl, apiKey, logger });
+    // Delegate session creation to adapter
+    const sessionData = await adapter.createSession(opts);
+    const instance = createSessionInstance(sessionData, { adapter, apiKey, logger });
     
     sessions.set(sessionData.id, instance);
-    logger.info('Session created', { sessionId: sessionData.id });
+    logger.info('Session created', { sessionId: sessionData.id, adapter: adapter.name });
     
     return instance;
   }
@@ -139,8 +134,13 @@ export function createSessionManager(options: SessionManagerOptions): SessionMan
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface SessionInstanceOptions {
-  baseUrl: string;
+  /** Backend adapter */
+  adapter: BackendAdapter;
+
+  /** API key for SSE authentication */
   apiKey?: string;
+
+  /** Logger instance */
   logger: Logger;
 }
 
@@ -148,7 +148,7 @@ function createSessionInstance(
   data: Session,
   options: SessionInstanceOptions
 ): SessionInstance {
-  const { baseUrl, apiKey, logger } = options;
+  const { adapter, apiKey, logger } = options;
   
   const stateStore: StateStore = createStateStore(data.state);
   const messages: AgUiMessage[] = [];
@@ -169,12 +169,15 @@ function createSessionInstance(
     if (eventStreamReady) return eventStreamReady;
 
     eventStreamReady = new Promise<void>((resolve) => {
+      // Get event stream URL from adapter
+      const eventStreamUrl = adapter.getEventStreamUrl(data.id);
+
       eventStream = createEventStream({
-        url: `${baseUrl}/api/sessions/${data.id}/events`,
+        url: eventStreamUrl,
         headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
         autoReconnect: true,
-        onStatusChange: (status) => {
-          if (status === 'connected') {
+        onStatusChange: (connStatus) => {
+          if (connStatus === 'connected') {
             resolve();
           }
         },
@@ -221,8 +224,9 @@ function createSessionInstance(
     // Wait for SSE connection to be ready before starting run
     await setupEventStream();
     
+    // Use adapter for run management
     const runManager = createRunManager({
-      baseUrl,
+      adapter,
       apiKey,
       sessionId: data.id,
       logger,
