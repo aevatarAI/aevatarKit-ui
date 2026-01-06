@@ -8,7 +8,6 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createStateStore, type StateStore } from './state';
-import type { JsonPatchOperation } from '@aevatar/kit-types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Store Creation Tests

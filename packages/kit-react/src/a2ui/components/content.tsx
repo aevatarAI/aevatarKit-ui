@@ -541,7 +541,7 @@ export interface IconProps extends React.SVGAttributes<SVGElement> {
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 }
 
-export function Icon({ className, name, size = 'md', children, ...props }: IconProps) {
+export function Icon({ className, name: _name, size = 'md', children, ...props }: IconProps) {
   const sizeClass = {
     xs: 'h-3 w-3',
     sm: 'h-4 w-4',
