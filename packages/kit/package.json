@@ -1,6 +1,6 @@
 {
   "name": "@aevatar/kit",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "AevatarKit SDK - Complete TypeScript SDK for Aevatar Agent Framework",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
