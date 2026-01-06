@@ -205,7 +205,7 @@ export function useA2uiSurface(
     // 订阅数据变更来触发 surface 更新
     const unsubscribe = engine.getDataModel().subscribe(() => {
       const newSurface = engine.getSurface(surfaceId);
-      setSurface(newSurface);
+        setSurface(newSurface);
     });
 
     return unsubscribe;

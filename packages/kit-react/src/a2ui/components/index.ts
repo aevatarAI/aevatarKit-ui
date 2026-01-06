@@ -143,3 +143,11 @@ export {
   type BreadcrumbItem,
 } from './navigation';
 
+// Science Components
+export {
+  MoleculeViewer,
+  type MoleculeViewerProps,
+  type MoleculeStyle,
+  type MoleculeColorScheme,
+} from './science';
+

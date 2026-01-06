@@ -184,7 +184,7 @@ function createRunInstance(data: Run, options: RunInstanceOptions): RunInstance 
           reject(new Error('Failed to fetch run status'));
           return;
         }
-
+        
         if (runData.status === 'completed' || runData.status === 'failed' || runData.status === 'cancelled') {
           clearInterval(checkInterval);
           status = runData.status;

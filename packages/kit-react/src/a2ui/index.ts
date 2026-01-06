@@ -4,7 +4,8 @@
  * ============================================================================
  * 
  * A2UI SDK React 集成
- * - 43 个 shadcn/ui + Radix UI 标准组件
+ * - 44 个 shadcn/ui + Radix UI 标准组件
+ * - Science 组件 (MoleculeViewer - iCn3D)
  * - A2UI 渲染器和上下文
  * - 标准组件注册表
  * 
@@ -63,7 +64,7 @@ export {
 } from './createStandardRegistry';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// All Standard Components (43个)
+// All Standard Components (44个) + Science Components
 // ─────────────────────────────────────────────────────────────────────────────
 
 export * from './components';

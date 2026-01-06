@@ -25,10 +25,11 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@aevatar/kit-types": "workspace:*",
-    "@aevatar/kit-protocol": "workspace:*",
-    "@aevatar/kit-core": "workspace:*",
+    "3dmol": "^2.5.3",
     "@aevatar/kit-a2ui": "workspace:*",
+    "@aevatar/kit-core": "workspace:*",
+    "@aevatar/kit-protocol": "workspace:*",
+    "@aevatar/kit-types": "workspace:*",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
     "@radix-ui/react-avatar": "^1.1.0",

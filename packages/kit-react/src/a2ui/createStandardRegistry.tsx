@@ -4,7 +4,15 @@
  * ============================================================================
  * 
  * 创建预注册标准组件的 A2UI 组件注册表
- * 包含 43 个 shadcn/ui + Radix UI 标准组件
+ * 包含 44 个 shadcn/ui + Radix UI 标准组件 + 科学可视化组件
+ * 
+ * Categories:
+ * - Layout (7): Container, Row, Column, Grid, Card, Divider, Spacer
+ * - Input (12): TextField, TextArea, Checkbox, Switch, Select, etc.
+ * - Content (15): Text, Heading, Button, Image, Progress, etc.
+ * - Feedback (5): Dialog, AlertDialog, Toast, Popover, Skeleton
+ * - Navigation (4): Tabs, Accordion, DropdownMenu, Breadcrumb
+ * - Science (1): MoleculeViewer (iCn3D)
  * 
  * ============================================================================
  */
@@ -74,6 +82,9 @@ import {
   DropdownMenu,
   Breadcrumb,
 } from './components/navigation';
+
+// Science Components (1)
+import { MoleculeViewer } from './components/science';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -154,6 +165,11 @@ const standardRenderers: Record<string, ComponentRenderer<any, ReactNode>> = {
   DropdownMenu: (props: any) => <DropdownMenu {...props} />,
   Dropdown: (props: any) => <DropdownMenu {...props} />, // alias
   Breadcrumb: (props: any) => <Breadcrumb {...props} />,
+  
+  // ==================== Science (1) ====================
+  MoleculeViewer: (props: any) => <MoleculeViewer {...props} />,
+  ProteinViewer: (props: any) => <MoleculeViewer {...props} />, // alias
+  Molecule3D: (props: any) => <MoleculeViewer {...props} />, // alias
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -223,5 +239,6 @@ export function getComponentCategories(): Record<string, string[]> {
               'Table', 'Icon', 'Tooltip'],
     feedback: ['Dialog', 'AlertDialog', 'Popover', 'Skeleton'],
     navigation: ['Tabs', 'Accordion', 'DropdownMenu', 'Breadcrumb'],
+    science: ['MoleculeViewer'],
   };
 }

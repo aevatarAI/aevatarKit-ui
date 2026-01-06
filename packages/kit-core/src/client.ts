@@ -141,7 +141,7 @@ export function createAevatarClient(options: AevatarClientOptions): AevatarClien
     apiKey,
     timeout,
   });
-
+  
   let currentStatus: ConnectionStatus = 'disconnected';
   let sessionManager: SessionManager | null = null;
 

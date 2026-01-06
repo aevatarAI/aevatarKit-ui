@@ -389,7 +389,11 @@ export type A2uiStandardComponentType =
   // Chart (扩展)
   | 'LineChart'
   | 'BarChart'
-  | 'PieChart';
+  | 'PieChart'
+  // Science (科学可视化)
+  | 'MoleculeViewer'
+  | 'ProteinViewer'
+  | 'Molecule3D';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AG-UI Integration Types
