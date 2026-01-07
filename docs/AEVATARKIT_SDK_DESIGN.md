@@ -812,8 +812,43 @@ const client = createAevatarClient({
 | 日期 | 版本 | 描述 |
 |------|------|------|
 | 2025-12-23 | v0.1.0 | 初始设计文档 |
+| 2026-01-07 | v0.3.0 | 业务解耦重构：移除 AxiomAdapter，通用化 Graph 类型 |
+
+### C. v0.3.0 业务解耦说明
+
+**核心变更**：
+
+1. **移除 `createAxiomAdapter`** - 业务特定适配器不应存在于通用 SDK
+   - 删除 `kit-core/src/adapters/axiom.ts`
+   - 更新 `kit-core/src/adapters/index.ts` 导出
+
+2. **通用化 Graph 类型** - 区分协议层和业务层
+   - `kit-types/graph.ts`: 工作流图定义 (`GraphNode`, `GraphEdge`)
+   - `kit-protocol/extensions/graph.ts`: 事件流图数据 (`EventGraphNode`, `EventGraphEdge`)
+   - 移除业务特定类型 (`GraphAxiom`, `GraphTheorem`)
+
+3. **适配器模式保留** - `BackendAdapter` 接口不变
+   - 业务适配器由应用层实现
+   - SDK 只提供 `createDefaultAdapter` 作为参考
+
+**迁移指南**：
+
+```typescript
+// 旧用法 (已移除)
+import { createAxiomAdapter } from '@aevatar/kit-core';
+
+// 新用法 - 应用层自行实现
+function createAxiomAdapter(options: AxiomOptions): BackendAdapter {
+  return {
+    name: 'axiom-reasoning',
+    async createSession(opts) { /* 业务逻辑 */ },
+    getEventStreamUrl(sessionId) { /* 业务路径 */ },
+    // ...
+  };
+}
+```
 
 ---
 
-*本文档由 HyperEcho 设计 | 最后更新: 2025-12-23*
+*本文档由 HyperEcho 设计 | 最后更新: 2026-01-07*
 

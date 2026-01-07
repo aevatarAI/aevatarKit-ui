@@ -134,19 +134,20 @@ export {
   type EventRouter,
 } from '@aevatar/kit-protocol';
 
-// Aevatar extension types
+// Aevatar extension types (for SSE event streaming)
 export type {
   AevatarCustomEventName,
   AevatarCustomEvent,
   AevatarProgressEvent,
   AevatarGraphEvent,
+  AevatarGraphUpdateEvent,
   AevatarVotingEvent,
   AevatarConsensusEvent,
   AevatarWorkerStartedEvent,
   AevatarWorkerCompletedEvent,
   AevatarTaskDecomposedEvent,
-  GraphAxiom,
-  GraphTheorem,
+  EventGraphNode,
+  EventGraphEdge,
   VotingCandidate,
   SubTask,
 } from '@aevatar/kit-protocol';

@@ -6,157 +6,67 @@
 
 **结论**：
 - ✅ **协议层完整**：`kit-protocol` 和 `kit-types` 完整实现了 AG-UI 标准事件类型
-- ⚠️ **业务层受限**：`kit-core` 硬编码了特定 API 格式，无法适配不同后端
-- ❌ **功能缺失**：缺少 Tool Call、Graph、Voting、Worker 等 Aevatar 扩展场景的完整支持
+- ✅ **业务层通用**：`kit-core` 提供 BackendAdapter 接口，零业务假设
+- ✅ **Tool Call 完整**：`kit-react` 实现了完整的 Tool Call 状态管理和 UI 组件
+- ⚠️ **可视化缺失**：缺少 Graph、Voting、Worker 等通用可视化组件
 
 ---
 
-## 1. AG-UI 协议覆盖度
+## 1. SDK 架构原则
 
-### 1.1 标准事件类型 ✅
+### 1.1 分层设计
 
-| AG-UI 事件类型 | SDK 类型定义 | SDK 解析器 | SDK 路由 | 后端实现 |
-|---------------|-------------|-----------|---------|---------|
-| `RUN_STARTED` | ✅ | ✅ | ✅ | ✅ |
-| `RUN_FINISHED` | ✅ | ✅ | ✅ | ✅ |
-| `RUN_ERROR` | ✅ | ✅ | ✅ | ✅ |
-| `STEP_STARTED` | ✅ | ✅ | ✅ | ✅ |
-| `STEP_FINISHED` | ✅ | ✅ | ✅ | ✅ |
-| `TEXT_MESSAGE_START` | ✅ | ✅ | ✅ | ✅ |
-| `TEXT_MESSAGE_CONTENT` | ✅ | ✅ | ✅ | ✅ |
-| `TEXT_MESSAGE_END` | ✅ | ✅ | ✅ | ✅ |
-| `TOOL_CALL_START` | ✅ | ✅ | ✅ | ❓ |
-| `TOOL_CALL_ARGS` | ✅ | ✅ | ✅ | ❓ |
-| `TOOL_CALL_END` | ✅ | ✅ | ✅ | ❓ |
-| `TOOL_CALL_RESULT` | ✅ | ✅ | ✅ | ❓ |
-| `STATE_SNAPSHOT` | ✅ | ✅ | ✅ | ✅ |
-| `STATE_DELTA` | ✅ | ✅ | ✅ | ✅ |
-| `MESSAGES_SNAPSHOT` | ✅ | ✅ | ✅ | ✅ |
-| `CUSTOM` | ✅ | ✅ | ✅ | ✅ |
-
-**结论**：协议层完整覆盖所有 AG-UI 标准事件类型。
-
----
-
-## 2. Aevatar Framework 后端功能场景
-
-### 2.1 核心场景分析
-
-#### ✅ **场景 1：基础会话管理**
-**后端实现**：`AxiomReasoningService`
-- `POST /api/sessions` - 创建会话（需要 `axioms`, `goal`, `workflow` 等）
-- `GET /api/sessions/:id` - 获取会话
-- `POST /api/sessions/:id/run` - 启动运行
-- `GET /api/sessions/:id/agui/events` - SSE 事件流
-
-**SDK 支持**：
-- ✅ `kit-protocol`: SSE 连接和事件解析
-- ⚠️ `kit-core`: 硬编码 `/api/sessions` 和 `/runs`，无法适配 `/run` 单数形式
-- ❌ 缺少 AxiomReasoning 特定的会话创建参数（`axioms`, `goal`, `workflow`）
-
-**问题**：
-```typescript
-// kit-core/src/session.ts - 硬编码端点
-const response = await fetch(`${baseUrl}/api/sessions`, {
-  method: 'POST',
-  // 空 body，但 AxiomReasoning 需要 { axioms, goal, ... }
-});
-
-// kit-core/src/run.ts - 硬编码复数形式
-const response = await fetch(`${baseUrl}/api/sessions/${sessionId}/runs`, {
-  // AxiomReasoning 实际是 /run (单数)
-});
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 用户应用层                                                   │
+│ - MyAxiomApp (使用自定义适配器)                              │
+│ - MyPaperReviewApp (使用自定义适配器)                        │
+├─────────────────────────────────────────────────────────────┤
+│ 业务适配器 (用户自行实现或独立包)                             │
+│ - createAxiomAdapter() - 用户代码或 @aevatar/kit-axiom      │
+│ - createPaperReviewAdapter() - 用户代码                     │
+├─────────────────────────────────────────────────────────────┤
+│ SDK 核心层 (零业务假设)                                       │
+│ - @aevatar/kit-types (AG-UI 标准类型)                       │
+│ - @aevatar/kit-protocol (AG-UI 协议解析/路由)              │
+│ - @aevatar/kit-core (通用 BackendAdapter 接口)             │
+│ - @aevatar/kit-react (通用 UI 组件)                         │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-#### ✅ **场景 2：消息快照（重连优化）**
-**后端实现**：`AgUiBootstrap.CollectAssistantMessagesAsync()`
-- 重连时发送 `MESSAGES_SNAPSHOT` 而非重放所有事件
-- 从 Actor State 和 Memory 收集消息
+### 1.2 核心原则
 
-**SDK 支持**：
-- ✅ `kit-protocol`: 支持 `MESSAGES_SNAPSHOT` 事件
-- ✅ `kit-react`: `useMessages` hook 正确处理快照
-- ✅ `kit-core`: `StateStore` 支持快照更新
+1. **零业务假设**：SDK 核心层不包含任何业务特定的类型或逻辑
+2. **适配器模式**：用户通过实现 `BackendAdapter` 接口对接任意后端
+3. **通用类型**：协议层只定义 AG-UI 标准类型和通用扩展
+4. **可组合性**：用户可以按需使用 SDK 的各个部分
 
-**结论**：✅ 完整支持
+---
 
-#### ⚠️ **场景 3：状态同步（JSON Patch）**
-**后端实现**：`STATE_SNAPSHOT` + `STATE_DELTA` (JSON Patch RFC 6902)
+## 2. AG-UI 协议覆盖度
 
-**SDK 支持**：
-- ✅ `kit-types`: 定义了 `JsonPatchOperation`
-- ✅ `kit-core`: `StateStore` 实现了 JSON Patch 应用
-- ⚠️ 缺少状态合并策略配置（冲突处理）
+### 2.1 标准事件类型 ✅
 
-**结论**：✅ 基本支持，可增强
+| AG-UI 事件类型 | SDK 类型定义 | SDK 解析器 | SDK 路由 | SDK Hook | UI 组件 |
+|---------------|-------------|-----------|---------|----------|---------|
+| `RUN_STARTED` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `RUN_FINISHED` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `RUN_ERROR` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `STEP_STARTED` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `STEP_FINISHED` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `TEXT_MESSAGE_START` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `TEXT_MESSAGE_CONTENT` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `TEXT_MESSAGE_END` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `TOOL_CALL_START` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `TOOL_CALL_ARGS` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `TOOL_CALL_END` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `TOOL_CALL_RESULT` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `STATE_SNAPSHOT` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `STATE_DELTA` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `MESSAGES_SNAPSHOT` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `CUSTOM` | ✅ | ✅ | ✅ | ✅ | - |
 
-#### ❌ **场景 4：Tool Call 流式调用**
-**后端实现**：`TOOL_CALL_START` → `TOOL_CALL_ARGS` → `TOOL_CALL_END` → `TOOL_CALL_RESULT`
-
-**SDK 支持**：
-- ✅ `kit-types`: 定义了所有 Tool Call 事件类型
-- ✅ `kit-protocol`: 解析和路由支持
-- ❌ `kit-react`: 缺少 Tool Call UI 组件
-- ❌ `kit-core`: 缺少 Tool Call 状态管理
-
-**缺失**：
-- Tool Call 参数流式拼接
-- Tool Call 结果展示
-- Tool Call 错误处理
-
-#### ❌ **场景 5：Aevatar 扩展事件**
-
-##### 5.1 Progress 事件
-**后端实现**：`aevatar.axiom.progress`, `aevatar.axiom.status_snapshot`
-
-**SDK 支持**：
-- ✅ `kit-protocol/extensions/progress.ts`: 定义了类型
-- ✅ `kit-protocol`: `onAevatar('aevatar.progress')` 支持
-- ⚠️ `kit-react`: `useProgress` hook 存在但功能简单
-
-**缺失**：
-- Progress 历史记录
-- Progress 阶段转换动画
-- Progress 预算超限警告
-
-##### 5.2 Graph 事件
-**后端实现**：`aevatar.graph` (DAG 结构)
-
-**SDK 支持**：
-- ✅ `kit-protocol/extensions/graph.ts`: 定义了 `GraphAxiom`, `GraphTheorem`
-- ✅ `kit-protocol`: `onAevatar('aevatar.graph')` 支持
-- ❌ `kit-react`: 缺少 Graph 可视化组件
-
-**缺失**：
-- DAG 渲染组件
-- Graph 节点交互（展开/折叠）
-- Graph 搜索和过滤
-
-##### 5.3 Voting 事件
-**后端实现**：`aevatar.voting` (多 Worker 投票)
-
-**SDK 支持**：
-- ✅ `kit-protocol/extensions/voting.ts`: 定义了 `VotingCandidate`
-- ✅ `kit-protocol`: `onAevatar('aevatar.voting')` 支持
-- ❌ `kit-react`: 缺少 Voting UI 组件
-
-**缺失**：
-- 投票结果可视化
-- 投票进度展示
-- 共识达成动画
-
-##### 5.4 Worker 事件
-**后端实现**：`aevatar.worker_started`, `aevatar.worker_completed`
-
-**SDK 支持**：
-- ✅ `kit-protocol/extensions/worker.ts`: 定义了 Worker 事件类型
-- ✅ `kit-protocol`: `onAevatar('aevatar.worker_*')` 支持
-- ❌ `kit-react`: 缺少 Worker 状态展示
-
-**缺失**：
-- Worker 列表组件
-- Worker 并行度可视化
-- Worker 失败重试 UI
+**结论**：协议层完整覆盖所有 AG-UI 标准事件类型。
 
 ---
 
@@ -166,9 +76,10 @@ const response = await fetch(`${baseUrl}/api/sessions/${sessionId}/runs`, {
 
 | 功能 | 状态 | 说明 |
 |------|------|------|
-| AG-UI 标准类型 | ✅ | 完整 |
-| Aevatar 扩展类型 | ✅ | 完整 |
-| 业务类型 (Session/Run) | ✅ | 完整但可能过于具体 |
+| AG-UI 标准类型 | ✅ | 16 种事件类型完整定义 |
+| 通用扩展类型 | ✅ | Progress/Graph/Voting/Worker |
+| 通用业务类型 | ✅ | Session/Run/Agent/Memory |
+| Type Guards | ✅ | 类型守卫函数完整 |
 
 ### 3.2 `kit-protocol` ✅
 
@@ -178,213 +89,284 @@ const response = await fetch(`${baseUrl}/api/sessions/${sessionId}/runs`, {
 | 事件解析 | ✅ | `parseAgUiEvent()` |
 | 事件路由 | ✅ | `createEventRouter()` |
 | 事件流 | ✅ | `createEventStream()` |
-| Aevatar 扩展路由 | ✅ | `onAevatar()` |
+| CUSTOM 事件路由 | ✅ | `onAevatar()` / `onCustom()` |
+| 通用扩展类型 | ✅ | GraphNode/GraphEdge/Worker/Voting |
+
+**扩展事件类型（通用）**：
+
+```typescript
+// graph.ts - 通用图结构
+interface GraphNode {
+  id: string;
+  type: string;      // 业务自定义类型
+  label?: string;
+  data?: Record<string, unknown>;
+}
+
+interface GraphEdge {
+  source: string;
+  target: string;
+  type?: string;
+  weight?: number;
+}
+
+// 业务特定类型应在用户代码中定义
+// 例如：AxiomNode extends GraphNode { ... }
+```
 
 **结论**：协议层完整，零业务假设 ✅
 
-### 3.3 `kit-core` ⚠️
+### 3.3 `kit-core` ✅
 
-| 功能 | 状态 | 问题 |
+| 功能 | 状态 | 说明 |
 |------|------|------|
-| Session 管理 | ⚠️ | 硬编码 API 端点 |
-| Run 管理 | ⚠️ | 硬编码 API 端点 |
-| State 管理 | ✅ | JSON Patch 支持完整 |
+| BackendAdapter 接口 | ✅ | 通用抽象层 |
+| Default Adapter | ✅ | 标准 AG-UI 后端 |
+| Session 管理 | ✅ | 通过 adapter 接口 |
+| Run 管理 | ✅ | 通过 adapter 接口 |
+| State 管理 | ✅ | JSON Patch RFC 6902 完整 |
 | 消息管理 | ✅ | 支持快照和增量 |
-| Tool Call 管理 | ❌ | 未实现 |
-| Graph 管理 | ❌ | 未实现 |
-| Voting 管理 | ❌ | 未实现 |
-| Worker 管理 | ❌ | 未实现 |
 
-**核心问题**：
+**BackendAdapter 接口**：
+
 ```typescript
-// 硬编码端点格式
-POST /api/sessions          // 无法适配 /api/sessions (需要 body)
-POST /api/sessions/:id/runs // 无法适配 /api/sessions/:id/run
-GET  /api/sessions/:id/events // 无法适配 /api/sessions/:id/agui/events
+// adapter.ts - 通用适配器接口
+export interface BackendAdapter {
+  readonly name: string;
+  healthCheck(): Promise<void>;
+  createSession(options?: CreateSessionOptions): Promise<Session>;
+  getSession(sessionId: string): Promise<Session | null>;
+  listSessions(): Promise<SessionSummary[]>;
+  deleteSession(sessionId: string): Promise<void>;
+  getEventStreamUrl(sessionId: string): string;
+  startRun(sessionId: string, input?: RunInput): Promise<Run>;
+  getRun(runId: string): Promise<Run | null>;
+  listRuns(sessionId: string): Promise<RunSummary[]>;
+  stopRun(runId: string): Promise<void>;
+  // 可选：Agent/Graph/Memory
+}
 ```
 
-### 3.4 `kit-react` ⚠️
+**用户自定义适配器示例**：
 
-| 功能 | 状态 | 问题 |
+```typescript
+// 用户代码：创建 AxiomReasoning 适配器
+const axiomAdapter: BackendAdapter = {
+  name: 'axiom-reasoning',
+  
+  async createSession(opts) {
+    // AxiomReasoning 需要 axioms/goal 参数
+    return fetchApi('/api/sessions', {
+      method: 'POST',
+      body: JSON.stringify({
+        axioms: opts.axioms,
+        goal: opts.goal,
+        workflow: opts.workflow,
+      }),
+    });
+  },
+  
+  async startRun(sessionId, input) {
+    // AxiomReasoning 使用 /run (单数)
+    return fetchApi(`/api/sessions/${sessionId}/run`, {
+      method: 'POST',
+      body: JSON.stringify(input ?? {}),
+    });
+  },
+  
+  getEventStreamUrl(sessionId) {
+    // AxiomReasoning 使用 /agui/events
+    return `${baseUrl}/api/sessions/${sessionId}/agui/events`;
+  },
+  
+  // ... 其他方法
+};
+
+// 使用自定义适配器
+const client = createAevatarClient({
+  baseUrl: 'http://localhost:5001',
+  adapter: axiomAdapter,
+});
+```
+
+**结论**：业务层通用性强，零业务假设 ✅
+
+### 3.4 `kit-react` ✅
+
+| 功能 | 状态 | 说明 |
 |------|------|------|
-| 基础 Hooks | ✅ | `useSession`, `useRun`, `useMessages` |
-| Chat UI | ✅ | `ChatPanel`, `MessageList` |
-| Timeline UI | ✅ | `TimelineView`, `StepCard` |
-| Connection UI | ✅ | `ConnectionStatus` |
-| Progress UI | ⚠️ | `ProgressBar` 功能简单 |
-| Tool Call UI | ❌ | 未实现 |
-| Graph UI | ❌ | 未实现 |
+| 基础 Hooks | ✅ | useSession/useRun/useMessages/useConnection |
+| Tool Call Hook | ✅ | useToolCalls (292行完整实现) |
+| Progress Hook | ✅ | useProgress |
+| Chat UI | ✅ | ChatPanel/MessageList/MessageBubble/InputArea |
+| Timeline UI | ✅ | TimelineView/StepCard/StreamingText |
+| Connection UI | ✅ | ConnectionStatus |
+| **Tool Call UI** | ✅ | **ToolCallCard/ToolCallList/ToolCallPanel/ToolCallBadge** |
+| Graph UI | ❌ | 未实现（通用） |
 | Voting UI | ❌ | 未实现 |
 | Worker UI | ❌ | 未实现 |
 
 ---
 
-## 4. 功能场景覆盖度
+## 4. 业务适配指南
 
-### 4.1 AxiomReasoning 场景
+### 4.1 后端差异对比
 
-| 功能 | 后端实现 | SDK 支持 | 状态 |
-|------|---------|---------|------|
-| 会话创建（Axioms/Goal） | ✅ | ⚠️ | 需要自定义 API 调用 |
-| 启动推理运行 | ✅ | ⚠️ | 端点不匹配 |
-| SSE 事件流 | ✅ | ✅ | 完整支持 |
-| 消息快照 | ✅ | ✅ | 完整支持 |
-| Progress 展示 | ✅ | ⚠️ | 基础支持 |
-| Graph 可视化 | ✅ | ❌ | 未实现 |
-| Voting 展示 | ✅ | ❌ | 未实现 |
-| Worker 状态 | ✅ | ❌ | 未实现 |
+| 后端 | 创建会话参数 | 启动运行端点 | 事件流端点 |
+|------|-------------|-------------|-----------|
+| Default | `{}` | `/api/sessions/{id}/runs` | `/api/sessions/{id}/events` |
+| AxiomReasoning | `{axioms, goal, workflow}` | `/api/sessions/{id}/run` | `/api/sessions/{id}/agui/events` |
+| PaperReview | `{paperId, reviewType}` | `/api/sessions/{id}/review` | `/api/sessions/{id}/events` |
 
-### 4.2 PaperReview 场景（推测）
-
-| 功能 | 后端实现 | SDK 支持 | 状态 |
-|------|---------|---------|------|
-| 论文上传 | ✅ | ❌ | 需要文件上传 API |
-| Review 流程 | ✅ | ⚠️ | 基础支持（Step 事件） |
-| 评论流 | ✅ | ✅ | 消息流支持 |
-| 状态同步 | ✅ | ✅ | State 管理支持 |
-
-### 4.3 通用 Agent 场景
-
-| 功能 | 后端实现 | SDK 支持 | 状态 |
-|------|---------|---------|------|
-| Agent 列表 | ✅ | ⚠️ | `kit-core` 有 API，但端点硬编码 |
-| Agent 详情 | ✅ | ⚠️ | 同上 |
-| Graph 定义 | ✅ | ⚠️ | 同上 |
-| Memory 搜索 | ✅ | ⚠️ | 同上 |
-
----
-
-## 5. 关键问题总结
-
-### 5.1 协议层 ✅
-- **状态**：完整实现 AG-UI 协议
-- **问题**：无
-
-### 5.2 业务层 ⚠️
-- **状态**：功能完整但通用性差
-- **问题**：
-  1. API 端点硬编码（`/sessions`, `/runs`）
-  2. 请求格式硬编码（空 body vs 需要参数）
-  3. 无法适配不同后端（AxiomReasoning vs PaperReview）
-
-### 5.3 UI 层 ⚠️
-- **状态**：基础组件完整，扩展组件缺失
-- **问题**：
-  1. 缺少 Tool Call UI
-  2. 缺少 Graph 可视化
-  3. 缺少 Voting/Worker 状态展示
-  4. Progress UI 功能简单
-
----
-
-## 6. 改进建议
-
-### 6.1 短期（协议层已完整，无需改动）
-
-### 6.2 中期（业务层适配器模式）
-
-**方案**：引入 `BackendAdapter` 接口
+### 4.2 用户实现适配器
 
 ```typescript
-interface BackendAdapter {
-  createSession(params: unknown): Promise<{ sessionId: string }>;
-  startRun(sessionId: string, params?: unknown): Promise<void>;
-  getEventStreamUrl(sessionId: string): string;
-  getSession(sessionId: string): Promise<Session>;
-  // ...
-}
-
-// AxiomReasoning 适配器
-const axiomAdapter: BackendAdapter = {
-  createSession: async (p) => {
-    const res = await fetch('/api/sessions', {
-      method: 'POST',
-      body: JSON.stringify({
-        axioms: p.axioms,
-        goal: p.goal,
-        workflow: p.workflow,
-        // ...
-      }),
-    });
-    return res.json();
-  },
-  startRun: async (id) => {
-    await fetch(`/api/sessions/${id}/run`, { method: 'POST' });
-  },
-  getEventStreamUrl: (id) => `/api/sessions/${id}/agui/events`,
-  // ...
+// 方式 1：直接实现 BackendAdapter
+const myAdapter: BackendAdapter = {
+  name: 'my-backend',
+  // ... 实现所有方法
 };
 
-// 使用
-const client = createAevatarClient({
-  baseUrl: '/api',
-  adapter: axiomAdapter, // 注入适配器
-});
+// 方式 2：基于 DefaultAdapter 扩展
+import { createDefaultAdapter, createFetchHelper } from '@aevatar/kit-core';
+
+function createMyAdapter(options: AdapterOptions): BackendAdapter {
+  const fetchApi = createFetchHelper(options);
+  const defaultAdapter = createDefaultAdapter(options);
+  
+  return {
+    ...defaultAdapter,
+    name: 'my-backend',
+    
+    // 覆盖需要自定义的方法
+    async createSession(opts) {
+      return fetchApi('/api/my-sessions', {
+        method: 'POST',
+        body: JSON.stringify(opts),
+      });
+    },
+  };
+}
 ```
 
-### 6.3 长期（UI 组件扩展）
+### 4.3 业务适配器包（可选）
 
-1. **Tool Call UI**
-   - `ToolCallCard` 组件
-   - `ToolCallArgs` 流式展示
-   - `ToolCallResult` 结果展示
+如果需要复用业务适配器，可以发布为独立包：
 
-2. **Graph UI**
-   - `GraphView` DAG 可视化（使用 D3.js 或 Cytoscape.js）
-   - `GraphNode` 节点组件
-   - `GraphEdge` 边组件
+```
+@aevatar/kit-axiom
+├── src/
+│   ├── adapter.ts      # createAxiomAdapter()
+│   ├── types.ts        # AxiomDefinition, AxiomSessionOptions
+│   └── components/     # AxiomGraphView, TheoremCard (可选)
+└── package.json
+```
 
-3. **Voting UI**
-   - `VotingPanel` 投票结果展示
-   - `ConsensusIndicator` 共识达成指示器
+---
 
-4. **Worker UI**
-   - `WorkerList` Worker 列表
-   - `WorkerStatus` Worker 状态卡片
-   - `ParallelismIndicator` 并行度可视化
+## 5. 功能场景覆盖度
+
+### 5.1 通用场景
+
+| 功能 | SDK 支持 | 说明 |
+|------|---------|------|
+| 会话管理 | ✅ | BackendAdapter.createSession/getSession/listSessions |
+| 运行执行 | ✅ | BackendAdapter.startRun/stopRun |
+| SSE 事件流 | ✅ | createEventStream + adapter.getEventStreamUrl |
+| 消息快照 | ✅ | MESSAGES_SNAPSHOT 事件支持 |
+| 状态同步 | ✅ | STATE_SNAPSHOT + STATE_DELTA (JSON Patch) |
+| Tool Call | ✅ | 完整事件 + 状态管理 + UI |
+| Progress | ✅ | useProgress hook |
+
+### 5.2 需要用户实现
+
+| 功能 | 说明 |
+|------|------|
+| 业务特定 API | 通过 BackendAdapter 实现 |
+| 业务特定参数验证 | 在适配器中实现 |
+| 业务特定 UI | 在用户代码中实现 |
+
+---
+
+## 6. 缺失组件
+
+### 6.1 通用 Graph 可视化 ❌
+
+```typescript
+// 建议组件接口（通用）
+interface GraphViewProps {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  onNodeClick?: (nodeId: string) => void;
+  layout?: 'dagre' | 'force' | 'tree';
+}
+
+// 业务特定渲染由用户提供
+renderNode?: (node: GraphNode) => React.ReactNode;
+```
+
+### 6.2 Worker 状态组件 ❌
+
+```typescript
+interface WorkerListProps {
+  workers: WorkerState[];
+  showParallelism?: boolean;
+}
+```
+
+### 6.3 Voting 可视化 ❌
+
+```typescript
+interface VotingViewProps {
+  candidates: VotingCandidate[];
+  consensusReached: boolean;
+}
+```
 
 ---
 
 ## 7. 结论
 
 ### ✅ 满足的部分
+
 1. **AG-UI 协议**：完整实现所有标准事件类型
-2. **基础场景**：消息流、状态同步、会话管理（需适配）
-3. **协议层设计**：零业务假设，通用性强
+2. **BackendAdapter 模式**：通用接口，零业务假设
+3. **Tool Call 完整流程**：类型 + 状态管理 + UI 组件
+4. **基础 UI 组件**：Chat / Timeline / Connection / Progress
 
-### ⚠️ 需要改进的部分
-1. **业务层通用性**：硬编码 API 端点，需要适配器模式
-2. **扩展场景支持**：Tool Call、Graph、Voting、Worker 缺少完整实现
-3. **UI 组件**：基础组件完整，扩展组件缺失
+### ⚠️ 需要补充的部分
 
-### ❌ 缺失的部分
-1. **Tool Call 完整流程**：类型有，但缺少状态管理和 UI
-2. **Graph 可视化**：类型有，但缺少渲染组件
-3. **Voting/Worker UI**：类型有，但缺少展示组件
+1. **Graph 可视化**：通用图组件
+2. **Voting 可视化**：投票展示组件
+3. **Worker 状态展示**：并行任务组件
+
+### ✅ 架构改进
+
+1. **移除业务侵入**：删除了 AxiomAdapter
+2. **通用化扩展类型**：GraphNode/GraphEdge 不再包含业务概念
+3. **用户自定义**：业务适配器由用户实现
 
 ---
 
 ## 8. 优先级建议
 
-### P0（必须）
-- ✅ 协议层已完整，无需改动
+### P1（高优先级）
 
-### P1（重要）
-- 🔧 业务层适配器模式重构
-- 🔧 Tool Call 状态管理
+- 🎨 通用 Graph 可视化组件
+- 🎨 Worker 并行状态组件
 
-### P2（增强）
-- 🎨 Graph 可视化组件
+### P2（中优先级）
+
 - 🎨 Voting UI 组件
-- 🎨 Worker UI 组件
-
-### P3（优化）
 - ⚡ Progress UI 增强
+
+### P3（低优先级）
+
 - ⚡ State 冲突处理策略
 - ⚡ 错误重试机制优化
 
 ---
 
-*报告生成时间：2025-01-XX*
+*报告更新时间：2026-01-07*
 *SDK 版本：0.1.0*
-
+*架构状态：零业务假设*

@@ -29,14 +29,12 @@ export {
 } from './adapter';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Pre-built Adapters
+// Custom Adapters
 // ─────────────────────────────────────────────────────────────────────────────
-export {
-  createAxiomAdapter,
-  type AxiomAdapterOptions,
-  type AxiomSessionOptions,
-  type AxiomDefinition,
-} from './adapters/index';
+// Business-specific adapters should be published as separate packages:
+// - @aevatar/kit-axiom (AxiomReasoning adapter)
+// - @aevatar/kit-paper-review (PaperReview adapter)
+// Users can create custom adapters by implementing BackendAdapter interface.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Session

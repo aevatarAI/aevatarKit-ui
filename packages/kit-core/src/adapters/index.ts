@@ -2,10 +2,18 @@
  * ============================================================================
  * Backend Adapters
  * ============================================================================
- * Pre-built adapters for common backend implementations
+ * This module is reserved for future generic adapter utilities.
+ * 
+ * Business-specific adapters (e.g., AxiomReasoning, PaperReview) should be
+ * published as separate packages:
+ * - @aevatar/kit-axiom
+ * - @aevatar/kit-paper-review
+ * 
+ * Users can create custom adapters by implementing the BackendAdapter interface
+ * from ./adapter.ts
  * ============================================================================
  */
 
-export { createAxiomAdapter, type AxiomAdapterOptions, type AxiomSessionOptions, type AxiomDefinition } from './axiom';
-
+// No pre-built adapters in core SDK
+// Business adapters should be in separate packages
 
