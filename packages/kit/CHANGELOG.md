@@ -1,5 +1,23 @@
 # @aevatar/kit
 
+## 1.0.0
+
+### Patch Changes
+
+- refactor: decouple business-specific code from core SDK
+
+  BREAKING CHANGE: `createAxiomAdapter` has been removed from @aevatar/kit-core.
+  Business-specific adapters should be implemented in the application layer.
+  - Remove AxiomAdapter (business adapters belong in app layer)
+  - Rename graph types to EventGraphNode/EventGraphEdge in kit-protocol
+  - Update exports to avoid type conflicts
+
+- Updated dependencies
+  - @aevatar/kit-core@1.0.0
+  - @aevatar/kit-protocol@1.0.0
+  - @aevatar/kit-react@1.0.0
+  - @aevatar/kit-a2ui@1.0.0
+
 ## 0.3.0
 
 ### Minor Changes

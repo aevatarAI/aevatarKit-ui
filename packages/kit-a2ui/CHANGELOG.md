@@ -1,5 +1,12 @@
 # @aevatar/kit-a2ui
 
+## 1.0.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @aevatar/kit-protocol@1.0.0
+
 ## 0.3.0
 
 ### Minor Changes

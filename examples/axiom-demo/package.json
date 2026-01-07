@@ -1,6 +1,6 @@
 {
   "name": "aevatar-axiom-demo",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "type": "module",
   "description": "AevatarKit SDK demo connected to AxiomReasoning AG-UI backend",

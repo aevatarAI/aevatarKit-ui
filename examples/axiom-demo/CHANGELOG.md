@@ -1,5 +1,12 @@
 # aevatar-axiom-demo
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies
+  - @aevatar/kit-protocol@1.0.0
+
 ## 0.1.2
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @aevatar-examples/molecule-demo
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies
+  - @aevatar/kit@1.0.0
+  - @aevatar/kit-react@1.0.0
+
 ## 0.2.1
 
 ### Patch Changes
