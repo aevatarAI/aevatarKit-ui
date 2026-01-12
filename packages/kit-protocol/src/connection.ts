@@ -3,6 +3,7 @@
  * SSE Connection Management
  * ============================================================================
  * Lightweight SSE connection wrapper with auto-reconnect
+ * Provides rich callbacks for connection lifecycle events
  * ============================================================================
  */
 
@@ -12,6 +13,25 @@ import type { ConnectionStatus, Unsubscribe } from '@aevatar/kit-types';
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Context information provided with error callbacks
+ */
+export interface ErrorContext {
+  /** Last successful event ID (if available) */
+  lastEventId?: string;
+  /** How long the connection was active before error (ms) */
+  connectionDuration: number;
+  /** Current reconnect attempt number */
+  reconnectAttempt: number;
+  /** Maximum reconnect attempts */
+  maxReconnectAttempts: number;
+  /** Connection URL */
+  url: string;
+}
+
+/**
+ * Connection options
+ */
 export interface ConnectionOptions {
   /** SSE endpoint URL */
   url: string;
@@ -31,10 +51,22 @@ export interface ConnectionOptions {
   /** Status change callback */
   onStatusChange?: (status: ConnectionStatus) => void;
   
-  /** Error callback */
-  onError?: (error: Error) => void;
+  /** Error callback with context */
+  onError?: (error: Error, context: ErrorContext) => void;
+
+  /** Called when reconnection attempt starts */
+  onReconnecting?: (attempt: number, maxAttempts: number, delayMs: number) => void;
+
+  /** Called when all reconnection attempts have failed */
+  onReconnectFailed?: (context: ErrorContext) => void;
+
+  /** Called when successfully reconnected after a disconnect */
+  onReconnected?: () => void;
 }
 
+/**
+ * Connection instance
+ */
 export interface Connection {
   /** Current connection status */
   status: ConnectionStatus;
@@ -54,8 +86,31 @@ export interface Connection {
   /** Subscribe to status changes */
   onStatusChange(callback: (status: ConnectionStatus) => void): Unsubscribe;
   
-  /** Subscribe to errors */
-  onError(callback: (error: Error) => void): Unsubscribe;
+  /** Subscribe to errors with context */
+  onError(callback: (error: Error, context: ErrorContext) => void): Unsubscribe;
+
+  /** Get current connection metrics */
+  getMetrics(): ConnectionMetrics;
+}
+
+/**
+ * Connection metrics for debugging/monitoring
+ */
+export interface ConnectionMetrics {
+  /** Current status */
+  status: ConnectionStatus;
+  /** Total connection attempts */
+  totalConnectAttempts: number;
+  /** Successful connections */
+  successfulConnections: number;
+  /** Current reconnect attempt */
+  currentReconnectAttempt: number;
+  /** Time of last successful connection */
+  lastConnectedAt: number | null;
+  /** Time of last error */
+  lastErrorAt: number | null;
+  /** Total messages received */
+  messagesReceived: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -71,6 +126,9 @@ export function createConnection(options: ConnectionOptions): Connection {
     headers = {},
     onStatusChange: externalStatusChange,
     onError: externalError,
+    onReconnecting: externalReconnecting,
+    onReconnectFailed: externalReconnectFailed,
+    onReconnected: externalReconnected,
   } = options;
 
   let eventSource: EventSource | null = null;
@@ -78,10 +136,20 @@ export function createConnection(options: ConnectionOptions): Connection {
   let reconnectAttempts = 0;
   let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  // Metrics tracking
+  let totalConnectAttempts = 0;
+  let successfulConnections = 0;
+  let lastConnectedAt: number | null = null;
+  let lastErrorAt: number | null = null;
+  let messagesReceived = 0;
+  let connectionStartTime: number | null = null;
+  let lastEventId: string | undefined;
+  let wasConnected = false; // Track if we were connected before for onReconnected
+
   // Listener sets
   const messageListeners = new Set<(data: string) => void>();
   const statusListeners = new Set<(status: ConnectionStatus) => void>();
-  const errorListeners = new Set<(error: Error) => void>();
+  const errorListeners = new Set<(error: Error, context: ErrorContext) => void>();
 
   // ───────────────────────────────────────────────────────────────────────────
   // Internal helpers
@@ -95,14 +163,31 @@ export function createConnection(options: ConnectionOptions): Connection {
     }
   }
 
+  function createErrorContext(): ErrorContext {
+    return {
+      lastEventId,
+      connectionDuration: connectionStartTime
+        ? Date.now() - connectionStartTime
+        : 0,
+      reconnectAttempt: reconnectAttempts,
+      maxReconnectAttempts,
+      url,
+    };
+  }
+
   function emitError(error: Error) {
-    errorListeners.forEach((cb) => cb(error));
-    externalError?.(error);
+    lastErrorAt = Date.now();
+    const context = createErrorContext();
+    errorListeners.forEach((cb) => cb(error, context));
+    externalError?.(error, context);
   }
 
   function buildUrl(): string {
     // Append headers as query params (EventSource doesn't support custom headers)
-    const urlObj = new URL(url, typeof window !== 'undefined' ? window.location.origin : undefined);
+    const urlObj = new URL(
+      url,
+      typeof window !== 'undefined' ? window.location.origin : undefined
+    );
     Object.entries(headers).forEach(([key, value]) => {
       urlObj.searchParams.set(key, value);
     });
@@ -112,6 +197,7 @@ export function createConnection(options: ConnectionOptions): Connection {
   function scheduleReconnect() {
     if (!autoReconnect || reconnectAttempts >= maxReconnectAttempts) {
       setStatus('error');
+      externalReconnectFailed?.(createErrorContext());
       return;
     }
 
@@ -123,6 +209,9 @@ export function createConnection(options: ConnectionOptions): Connection {
       reconnectDelayMs * Math.pow(2, reconnectAttempts - 1) + Math.random() * 1000,
       30000
     );
+
+    // Notify about reconnection attempt
+    externalReconnecting?.(reconnectAttempts, maxReconnectAttempts, delay);
 
     reconnectTimeout = setTimeout(() => {
       connect();
@@ -139,16 +228,29 @@ export function createConnection(options: ConnectionOptions): Connection {
     }
 
     setStatus('connecting');
+    totalConnectAttempts++;
+    connectionStartTime = Date.now();
 
     try {
       eventSource = new EventSource(buildUrl());
 
       eventSource.onopen = () => {
+        const wasReconnect = wasConnected && reconnectAttempts > 0;
         setStatus('connected');
+        lastConnectedAt = Date.now();
+        successfulConnections++;
+        wasConnected = true;
         reconnectAttempts = 0;
+
+        // Notify if this was a successful reconnection
+        if (wasReconnect) {
+          externalReconnected?.();
+        }
       };
 
       eventSource.onmessage = (event) => {
+        messagesReceived++;
+        lastEventId = event.lastEventId || lastEventId;
         messageListeners.forEach((cb) => cb(event.data));
       };
 
@@ -179,6 +281,7 @@ export function createConnection(options: ConnectionOptions): Connection {
     }
     
     reconnectAttempts = 0;
+    connectionStartTime = null;
     setStatus('disconnected');
   }
 
@@ -192,14 +295,30 @@ export function createConnection(options: ConnectionOptions): Connection {
     return () => messageListeners.delete(callback);
   }
 
-  function onStatusChange(callback: (status: ConnectionStatus) => void): Unsubscribe {
+  function onStatusChange(
+    callback: (status: ConnectionStatus) => void
+  ): Unsubscribe {
     statusListeners.add(callback);
     return () => statusListeners.delete(callback);
   }
 
-  function onError(callback: (error: Error) => void): Unsubscribe {
+  function onError(
+    callback: (error: Error, context: ErrorContext) => void
+  ): Unsubscribe {
     errorListeners.add(callback);
     return () => errorListeners.delete(callback);
+  }
+
+  function getMetrics(): ConnectionMetrics {
+    return {
+      status,
+      totalConnectAttempts,
+      successfulConnections,
+      currentReconnectAttempt: reconnectAttempts,
+      lastConnectedAt,
+      lastErrorAt,
+      messagesReceived,
+    };
   }
 
   return {
@@ -212,6 +331,6 @@ export function createConnection(options: ConnectionOptions): Connection {
     onMessage,
     onStatusChange,
     onError,
+    getMetrics,
   };
 }
-

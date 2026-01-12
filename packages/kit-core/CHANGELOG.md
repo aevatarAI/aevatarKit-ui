@@ -1,5 +1,12 @@
 # @aevatar/kit-core
 
+## 1.2.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @aevatar/kit-protocol@1.2.0
+
 ## 1.0.0
 
 ### Major Changes

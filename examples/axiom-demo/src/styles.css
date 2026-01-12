@@ -465,3 +465,102 @@ select:disabled {
   border-radius: 4px;
   font-size: 11px;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * SDK Badge (NEW)
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+.sdk-badge {
+  padding: 4px 8px;
+  background: linear-gradient(135deg, #10b981, #06b6d4);
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * SDK Features Section (NEW)
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+.sdk-features {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.05));
+  border-radius: var(--radius);
+  padding: 16px !important;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.feature-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.feature-list li {
+  font-size: 11px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Metrics Panel (NEW)
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+.metrics-panel {
+  height: 100%;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.metric-card {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius);
+  padding: 16px;
+  border: 1px solid var(--border);
+}
+
+.metric-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.metric-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.metric-value.status-connected {
+  color: var(--success);
+}
+
+.metric-value.status-connecting {
+  color: var(--warning);
+}
+
+.metric-value.status-reconnecting {
+  color: var(--warning);
+}
+
+.metric-value.status-error {
+  color: var(--error);
+}
+
+.metric-value.status-disconnected {
+  color: var(--text-muted);
+}

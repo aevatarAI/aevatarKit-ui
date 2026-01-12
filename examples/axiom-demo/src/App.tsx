@@ -2,29 +2,28 @@
  * ============================================================================
  * AxiomReasoning × @aevatar/kit-protocol Demo
  * ============================================================================
- * Demonstrates using kit-protocol as pure protocol layer:
- * - kit-protocol handles AG-UI protocol (SSE parsing, event types)
- * - App handles business logic (Axioms, Goal, Session creation)
+ * Demonstrates NEW SDK features:
+ * - Type-safe custom events via CustomEventMap<T>
+ * - Batch event registration via router options
+ * - bindMessageAggregation for TEXT_MESSAGE_* handling
+ * - Rich connection callbacks (onReconnecting, onReconnectFailed)
+ * - Connection metrics
  * ============================================================================
  */
 
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   createEventStream,
+  createEventRouter,
+  bindMessageAggregation,
   type EventStream,
   type StreamStatus,
+  type CustomEventMap,
+  type ErrorContext,
+  type ConnectionMetrics,
 } from '@aevatar/kit-protocol';
-import type {
-  AgUiEvent,
-  AgUiMessage,
-} from '@aevatar/kit-types';
-import {
-  isTextMessageStartEvent,
-  isTextMessageContentEvent,
-  isTextMessageEndEvent,
-  isMessagesSnapshotEvent,
-  isCustomEvent,
-} from '@aevatar/kit-types';
+import type { AgUiEvent, AgUiMessage } from '@aevatar/kit-types';
+import { isMessagesSnapshotEvent } from '@aevatar/kit-types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types (Application-specific)
@@ -48,6 +47,33 @@ interface ProgressInfo {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Type-safe Custom Events (NEW SDK FEATURE)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Define custom event types for type safety
+ * SDK now supports CustomEventMap<T> generics!
+ */
+interface AxiomCustomEvents extends CustomEventMap {
+  'aevatar.axiom.progress': {
+    phase: string;
+    progressPercent: number;
+    totalLlmCalls?: number;
+    totalTokens?: number;
+  };
+  'aevatar.axiom.status_snapshot': {
+    phase: string;
+    progressPercent: number;
+    totalLlmCalls?: number;
+    totalTokens?: number;
+  };
+  'aevatar.axiom.theorem_found': {
+    theorem: string;
+    proof: string;
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Default Config
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -63,135 +89,175 @@ A2: Socrates is a human`,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Custom Hooks (Using kit-protocol)
+// Custom Hook (Using NEW SDK Features)
 // ─────────────────────────────────────────────────────────────────────────────
 
+interface StreamState {
+  events: AgUiEvent[];
+  messages: AgUiMessage[];
+  streamingText: string;
+  isStreaming: boolean;
+  runStatus: 'idle' | 'running' | 'completed' | 'error';
+  progress: ProgressInfo;
+  status: StreamStatus;
+  metrics: ConnectionMetrics | null;
+  reconnectInfo: { attempt: number; max: number; delay: number } | null;
+}
+
 function useAgUiStream(url: string | null) {
-  const [events, setEvents] = useState<AgUiEvent[]>([]);
-  const [status, setStatus] = useState<StreamStatus>('disconnected');
-  const streamRef = useRef<EventStream | null>(null);
+  const [state, setState] = useState<StreamState>({
+    events: [],
+    messages: [],
+    streamingText: '',
+    isStreaming: false,
+    runStatus: 'idle',
+    progress: {},
+    status: 'disconnected',
+    metrics: null,
+    reconnectInfo: null,
+  });
+
+  const streamRef = useRef<EventStream<AxiomCustomEvents> | null>(null);
 
   useEffect(() => {
     if (!url) {
-      setStatus('disconnected');
+      setState((s) => ({ ...s, status: 'disconnected' }));
       return;
     }
 
-    const stream = createEventStream({
+    // ─────────────────────────────────────────────────────────────────────────
+    // Create router with batch registration (NEW SDK FEATURE)
+    // ─────────────────────────────────────────────────────────────────────────
+    const router = createEventRouter<AxiomCustomEvents>();
+
+    // Bind message aggregation (NEW SDK FEATURE)
+    const { unsubscribe: unbindMessages } = bindMessageAggregation(router, {
+      onMessageStart: (messageId) => {
+        console.log('[Message] Started:', messageId);
+        setState((s) => ({ ...s, isStreaming: true, streamingText: '' }));
+      },
+      onMessageChunk: (_messageId, accumulated) => {
+        setState((s) => ({ ...s, streamingText: accumulated }));
+      },
+      onMessageComplete: (messageId, fullContent) => {
+        console.log('[Message] Complete:', messageId);
+        setState((s) => ({
+          ...s,
+          isStreaming: false,
+          streamingText: '',
+          messages: [
+            ...s.messages,
+            { id: messageId, role: 'assistant', content: fullContent },
+          ],
+        }));
+      },
+    });
+
+    // Batch register standard events (NEW SDK FEATURE)
+    const unsubStandard = router.registerStandard({
+      RUN_STARTED: () => {
+        setState((s) => ({ ...s, runStatus: 'running' }));
+      },
+      RUN_FINISHED: () => {
+        setState((s) => ({ ...s, runStatus: 'completed' }));
+      },
+      RUN_ERROR: () => {
+        setState((s) => ({ ...s, runStatus: 'error' }));
+      },
+      MESSAGES_SNAPSHOT: (event) => {
+        if (isMessagesSnapshotEvent(event)) {
+          setState((s) => ({ ...s, messages: [...event.messages] }));
+        }
+      },
+    });
+
+    // Type-safe custom event handlers (NEW SDK FEATURE)
+    // event.value is now typed as { phase: string; progressPercent: number; ... }
+    const unsubProgress = router.onCustom('aevatar.axiom.progress', (event) => {
+      setState((s) => ({
+        ...s,
+        progress: {
+          phase: event.value.phase,
+          progressPercent: event.value.progressPercent,
+          llmCalls: event.value.totalLlmCalls,
+          totalTokens: event.value.totalTokens,
+        },
+      }));
+    });
+
+    const unsubSnapshot = router.onCustom('aevatar.axiom.status_snapshot', (event) => {
+      setState((s) => ({
+        ...s,
+        progress: {
+          ...s.progress,
+          phase: event.value.phase,
+          progressPercent: event.value.progressPercent,
+        },
+      }));
+    });
+
+    // Collect all events for display
+    router.onAny((event) => {
+      setState((s) => ({ ...s, events: [...s.events, event] }));
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Create stream with rich callbacks (NEW SDK FEATURE)
+    // ─────────────────────────────────────────────────────────────────────────
+    const stream = createEventStream<AxiomCustomEvents>({
       url,
       autoReconnect: true,
-      onStatusChange: setStatus,
+      onStatusChange: (status) => {
+        setState((s) => ({ ...s, status }));
+      },
+      // Rich error callback with context (NEW)
+      onError: (error, context: ErrorContext) => {
+        console.error('[Stream Error]', error.message);
+        console.log('  Connection duration:', context.connectionDuration, 'ms');
+        console.log('  Reconnect attempt:', context.reconnectAttempt);
+      },
+      // Reconnection callbacks (NEW)
+      onReconnecting: (attempt, max, delay) => {
+        console.log(`[Reconnecting] ${attempt}/${max} in ${delay}ms`);
+        setState((s) => ({ ...s, reconnectInfo: { attempt, max, delay } }));
+      },
+      onReconnectFailed: (context) => {
+        console.error('[Connection Lost] All reconnect attempts failed');
+        console.log('  Last event ID:', context.lastEventId);
+        setState((s) => ({ ...s, reconnectInfo: null }));
+      },
+      onReconnected: () => {
+        console.log('[Reconnected] Successfully reconnected');
+        setState((s) => ({ ...s, reconnectInfo: null }));
+      },
     });
 
     streamRef.current = stream;
 
-    // Collect all events
+    // Route events through our router
     stream.onAny((event) => {
-      setEvents((prev) => [...prev, event]);
+      router.route(event);
     });
 
     stream.connect();
 
+    // Update metrics periodically
+    const metricsInterval = setInterval(() => {
+      setState((s) => ({ ...s, metrics: stream.getMetrics() }));
+    }, 1000);
+
     return () => {
+      clearInterval(metricsInterval);
+      unbindMessages();
+      unsubStandard();
+      unsubProgress();
+      unsubSnapshot();
       stream.disconnect();
       streamRef.current = null;
     };
   }, [url]);
 
-  return { events, status, stream: streamRef.current };
-}
-
-function useAgUiMessages(events: AgUiEvent[]) {
-  return useMemo(() => {
-    let messages: AgUiMessage[] = [];
-    let streamingText = '';
-    let streamingMessageId: string | null = null;
-    let currentRole: 'user' | 'assistant' | 'system' | 'tool' = 'assistant';
-
-    for (const event of events) {
-      if (isMessagesSnapshotEvent(event)) {
-        messages = [...event.messages];
-        continue;
-      }
-
-      if (isTextMessageStartEvent(event)) {
-        streamingMessageId = event.messageId;
-        streamingText = '';
-        currentRole = event.role ?? 'assistant';
-        continue;
-      }
-
-      if (isTextMessageContentEvent(event)) {
-        if (event.messageId === streamingMessageId) {
-          streamingText += event.delta;
-        }
-        continue;
-      }
-
-      if (isTextMessageEndEvent(event)) {
-        if (event.messageId === streamingMessageId) {
-          messages.push({
-            id: streamingMessageId,
-            role: currentRole,
-            content: streamingText,
-          });
-          streamingMessageId = null;
-          streamingText = '';
-        }
-        continue;
-      }
-    }
-
-    return {
-      messages,
-      streamingText,
-      isStreaming: streamingMessageId !== null,
-    };
-  }, [events]);
-}
-
-function useAgUiRun(events: AgUiEvent[]) {
-  return useMemo(() => {
-    let runStatus: 'idle' | 'running' | 'completed' | 'error' = 'idle';
-    let runId: string | null = null;
-
-    for (const event of events) {
-      if (event.type === 'RUN_STARTED') {
-        runStatus = 'running';
-        runId = event.runId ?? null;
-      }
-      if (event.type === 'RUN_FINISHED') {
-        runStatus = 'completed';
-      }
-      if (event.type === 'RUN_ERROR') {
-        runStatus = 'error';
-      }
-    }
-
-    return { runStatus, runId, isRunning: runStatus === 'running' };
-  }, [events]);
-}
-
-function useAgUiProgress(events: AgUiEvent[]): ProgressInfo {
-  return useMemo(() => {
-    let progress: ProgressInfo = {};
-
-    for (const event of events) {
-      if (isCustomEvent(event)) {
-        if (event.name === 'aevatar.axiom.progress' || event.name === 'aevatar.axiom.status_snapshot') {
-          const value = event.value as Record<string, unknown>;
-          progress = {
-            phase: (value.phase as string) ?? progress.phase,
-            progressPercent: (value.progressPercent as number) ?? progress.progressPercent,
-            llmCalls: (value.totalLlmCalls as number) ?? progress.llmCalls,
-            totalTokens: (value.totalTokens as number) ?? progress.totalTokens,
-          };
-        }
-      }
-    }
-
-    return progress;
-  }, [events]);
+  return state;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -203,16 +269,25 @@ export default function App() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [workflows, setWorkflows] = useState<string[]>(['direct']);
   const [isCreating, setIsCreating] = useState(false);
-  const [activeTab, setActiveTab] = useState<'messages' | 'events'>('messages');
+  const [activeTab, setActiveTab] = useState<'messages' | 'events' | 'metrics'>('messages');
 
-  // SSE URL - WE decide the format, kit-protocol just connects
+  // SSE URL
   const sseUrl = sessionId ? `/api/sessions/${sessionId}/agui/events` : null;
 
-  // Use kit-protocol hooks
-  const { events, status } = useAgUiStream(sseUrl);
-  const { messages, streamingText, isStreaming } = useAgUiMessages(events);
-  const { runStatus, isRunning } = useAgUiRun(events);
-  const progress = useAgUiProgress(events);
+  // Use enhanced stream hook
+  const {
+    events,
+    messages,
+    streamingText,
+    isStreaming,
+    runStatus,
+    progress,
+    status,
+    metrics,
+    reconnectInfo,
+  } = useAgUiStream(sseUrl);
+
+  const isRunning = runStatus === 'running';
 
   // Load workflows
   useEffect(() => {
@@ -259,10 +334,17 @@ export default function App() {
         <div className="header-title">
           <span className="icon">⚛️</span>
           <h1>AxiomReasoning × @aevatar/kit-protocol</h1>
+          <span className="sdk-badge">SDK v1.2.0 Features</span>
         </div>
         <div className={`connection-badge ${isConnected ? '' : status === 'connecting' ? 'connecting' : 'error'}`}>
           <span className="dot" />
-          {status === 'connected' ? 'Connected' : status === 'connecting' ? 'Connecting...' : 'Disconnected'}
+          {reconnectInfo
+            ? `Reconnecting (${reconnectInfo.attempt}/${reconnectInfo.max})...`
+            : status === 'connected'
+              ? 'Connected'
+              : status === 'connecting'
+                ? 'Connecting...'
+                : 'Disconnected'}
         </div>
       </header>
 
@@ -387,11 +469,24 @@ export default function App() {
               )}
             </div>
           )}
+
+          {/* SDK Features Section (NEW) */}
+          <div className="config-section sdk-features">
+            <h3>🆕 SDK Features Used</h3>
+            <ul className="feature-list">
+              <li>✅ Type-safe CustomEventMap&lt;T&gt;</li>
+              <li>✅ bindMessageAggregation</li>
+              <li>✅ registerStandard (batch)</li>
+              <li>✅ onReconnecting / onReconnected</li>
+              <li>✅ ErrorContext with metrics</li>
+              <li>✅ getMetrics() for monitoring</li>
+            </ul>
+          </div>
         </aside>
 
         <main className="event-panel">
           <div className="event-header">
-            <h2>AG-UI Protocol Stream (via kit-protocol)</h2>
+            <h2>AG-UI Protocol Stream</h2>
             <div className="event-tabs">
               <button
                 className={`event-tab ${activeTab === 'messages' ? 'active' : ''}`}
@@ -405,6 +500,12 @@ export default function App() {
               >
                 Events ({events.length})
               </button>
+              <button
+                className={`event-tab ${activeTab === 'metrics' ? 'active' : ''}`}
+                onClick={() => setActiveTab('metrics')}
+              >
+                Metrics
+              </button>
             </div>
           </div>
 
@@ -416,8 +517,8 @@ export default function App() {
                     <span className="icon">💬</span>
                     <p>Click "Create & Run" to see streaming messages.</p>
                     <p className="hint">
-                      Using <code>@aevatar/kit-protocol</code>:<br/>
-                      <code>createEventStream</code>, <code>parseAgUiEvent</code>
+                      Now using <code>bindMessageAggregation</code> for<br/>
+                      automatic TEXT_MESSAGE_* handling!
                     </p>
                   </div>
                 ) : (
@@ -437,7 +538,7 @@ export default function App() {
                   </>
                 )}
               </div>
-            ) : (
+            ) : activeTab === 'events' ? (
               <div className="event-list">
                 {events.length === 0 ? (
                   <div className="empty-state">
@@ -454,6 +555,55 @@ export default function App() {
                       </pre>
                     </div>
                   ))
+                )}
+              </div>
+            ) : (
+              <div className="metrics-panel">
+                {metrics ? (
+                  <div className="metrics-grid">
+                    <div className="metric-card">
+                      <div className="metric-label">Status</div>
+                      <div className={`metric-value status-${metrics.status}`}>
+                        {metrics.status}
+                      </div>
+                    </div>
+                    <div className="metric-card">
+                      <div className="metric-label">Connect Attempts</div>
+                      <div className="metric-value">{metrics.totalConnectAttempts}</div>
+                    </div>
+                    <div className="metric-card">
+                      <div className="metric-label">Successful Connections</div>
+                      <div className="metric-value">{metrics.successfulConnections}</div>
+                    </div>
+                    <div className="metric-card">
+                      <div className="metric-label">Messages Received</div>
+                      <div className="metric-value">{metrics.messagesReceived}</div>
+                    </div>
+                    <div className="metric-card">
+                      <div className="metric-label">Last Connected</div>
+                      <div className="metric-value">
+                        {metrics.lastConnectedAt
+                          ? new Date(metrics.lastConnectedAt).toLocaleTimeString()
+                          : 'Never'}
+                      </div>
+                    </div>
+                    <div className="metric-card">
+                      <div className="metric-label">Last Error</div>
+                      <div className="metric-value">
+                        {metrics.lastErrorAt
+                          ? new Date(metrics.lastErrorAt).toLocaleTimeString()
+                          : 'None'}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <span className="icon">📊</span>
+                    <p>Connection metrics will appear here.</p>
+                    <p className="hint">
+                      Using <code>stream.getMetrics()</code> (NEW)
+                    </p>
+                  </div>
                 )}
               </div>
             )}

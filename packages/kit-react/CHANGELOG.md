@@ -1,5 +1,14 @@
 # @aevatar/kit-react
 
+## 1.2.0
+
+### Patch Changes
+
+- Updated dependencies
+  - @aevatar/kit-protocol@1.2.0
+  - @aevatar/kit-a2ui@1.2.0
+  - @aevatar/kit-core@1.2.0
+
 ## 1.0.0
 
 ### Patch Changes

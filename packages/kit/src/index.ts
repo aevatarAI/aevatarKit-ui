@@ -122,16 +122,47 @@ export {
 // Protocol (from @aevatar/kit-protocol)
 // ─────────────────────────────────────────────────────────────────────────────
 export {
+  // Connection
   createConnection,
-  createEventStream,
-  parseAgUiEvent,
-  parseCustomEvent,
-  createEventRouter,
   type Connection,
   type ConnectionOptions,
+  type ErrorContext,
+  type ConnectionMetrics,
+
+  // Event Stream
+  createEventStream,
   type EventStream,
+  type EventStreamOptions as ProtocolEventStreamOptions,
   type StreamStatus,
+
+  // Parser
+  parseAgUiEvent,
+  parseCustomEvent,
+
+  // Router (with batch registration + generics)
+  createEventRouter,
   type EventRouter,
+  type EventRouterOptions,
+  type StandardEventHandlers,
+  type CustomEventHandlers,
+  type CustomEventMap,
+  type TypedCustomEvent,
+
+  // JSON Patch (RFC 6902)
+  applyJsonPatch,
+  applyJsonPatchMutable,
+  validateJsonPatch,
+  type JsonPatchOperation as ProtocolJsonPatchOperation,
+  type JsonPatchOp,
+
+  // Message Buffer
+  createMessageBuffer,
+  bindMessageAggregation,
+  parseMessageId,
+  type MessageBuffer,
+  type MessageAggregation,
+  type MessageAggregationCallbacks,
+  type ParsedMessageId,
 } from '@aevatar/kit-protocol';
 
 // Aevatar extension types (for SSE event streaming)

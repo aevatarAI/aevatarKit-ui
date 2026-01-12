@@ -13,8 +13,17 @@
 - 🔌 **可扩展** - BackendAdapter 支持自定义后端适配
 - 📦 **模块化** - 按需引入，tree-shakable
 - 🎨 **组件化** - 43+ React 组件开箱即用
-- 🔒 **类型安全** - 完整 TypeScript 类型定义
+- 🔒 **类型安全** - 完整 TypeScript 类型定义 + 泛型自定义事件
 - 🖼️ **A2UI 引擎** - JSON → UI 动态渲染
+
+### 🆕 v1.2.0 新特性
+
+- **Type-safe Custom Events** - 泛型 `CustomEventMap<T>` 支持自定义事件类型推断
+- **Message Buffer** - `bindMessageAggregation` 自动处理 TEXT_MESSAGE_* 聚合
+- **Batch Registration** - `registerStandard()` / `registerCustom()` 批量注册事件
+- **Rich Connection Callbacks** - `onReconnecting` / `onReconnectFailed` / `onReconnected`
+- **Connection Metrics** - `getMetrics()` 获取连接统计信息
+- **JSON Patch (RFC 6902)** - `applyJsonPatch()` 用于 STATE_DELTA 处理
 
 ## 📦 Installation
 
@@ -118,13 +127,117 @@ stream.onAny((event) => {
 stream.connect();
 ```
 
+## 🆕 New Features (v1.2.0)
+
+### Type-safe Custom Events
+
+```typescript
+import { createEventStream, type CustomEventMap } from '@aevatar/kit-protocol';
+
+// Define your custom event types
+interface MyEvents extends CustomEventMap {
+  'worker.update': { id: string; status: string };
+  'task.complete': { taskId: string; result: unknown };
+}
+
+// Create type-safe stream
+const stream = createEventStream<MyEvents>({
+  url: '/api/events',
+});
+
+// event.value is typed as { id: string; status: string }
+stream.onCustom('worker.update', (event) => {
+  console.log(event.value.id, event.value.status);
+});
+```
+
+### Message Aggregation
+
+```typescript
+import { createEventRouter, bindMessageAggregation } from '@aevatar/kit-protocol';
+
+const router = createEventRouter();
+
+// Automatically handles TEXT_MESSAGE_START/CONTENT/END
+const { buffer, unsubscribe } = bindMessageAggregation(router, {
+  onMessageStart: (id) => console.log('Started:', id),
+  onMessageChunk: (id, accumulated) => updateUI(accumulated),
+  onMessageComplete: (id, fullContent) => saveMessage(fullContent),
+});
+```
+
+### Batch Event Registration
+
+```typescript
+import { createEventStream } from '@aevatar/kit-protocol';
+
+const stream = createEventStream({
+  url: '/api/events',
+  router: {
+    standard: {
+      RUN_STARTED: () => console.log('Started'),
+      RUN_FINISHED: () => console.log('Finished'),
+      TEXT_MESSAGE_CONTENT: (e) => console.log(e.delta),
+    },
+    custom: {
+      'app.progress': (e) => console.log('Progress:', e.value),
+    },
+  },
+});
+```
+
+### Rich Connection Callbacks
+
+```typescript
+const stream = createEventStream({
+  url: '/api/events',
+  onReconnecting: (attempt, max, delay) => {
+    showToast(`Reconnecting ${attempt}/${max} in ${delay}ms`);
+  },
+  onReconnectFailed: (context) => {
+    console.log('Duration:', context.connectionDuration);
+    showError('Connection lost permanently');
+  },
+  onReconnected: () => {
+    showSuccess('Reconnected!');
+  },
+});
+```
+
+### JSON Patch for STATE_DELTA
+
+```typescript
+import { applyJsonPatch } from '@aevatar/kit-protocol';
+
+const state = { count: 0, items: [] };
+
+stream.on('STATE_DELTA', (event) => {
+  const newState = applyJsonPatch(state, event.delta);
+  setState(newState);
+});
+```
+
+### Connection Metrics
+
+```typescript
+const metrics = stream.getMetrics();
+// {
+//   status: 'connected',
+//   totalConnectAttempts: 1,
+//   successfulConnections: 1,
+//   messagesReceived: 42,
+//   lastConnectedAt: 1704067200000,
+//   lastErrorAt: null,
+// }
+```
+
 ## 📚 Packages
 
 | Package | Description | Version |
 |---------|-------------|---------|
 | [`@aevatar/kit`](./packages/kit) | Main package (re-exports all) | ![npm](https://img.shields.io/npm/v/@aevatar/kit?label=) |
 | [`@aevatar/kit-types`](./packages/kit-types) | Type definitions | ![npm](https://img.shields.io/npm/v/@aevatar/kit-types?label=) |
-| [`@aevatar/kit-protocol`](./packages/kit-protocol) | AG-UI protocol (SSE, parsing) | ![npm](https://img.shields.io/npm/v/@aevatar/kit-protocol?label=) |
+| [`@aevatar/kit-protocol`](./packages/kit-protocol) | AG-UI protocol (SSE, parsing, utilities) | ![npm](https://img.shields.io/npm/v/@aevatar/kit-protocol?label=) |
 | [`@aevatar/kit-core`](./packages/kit-core) | Core client and logic | ![npm](https://img.shields.io/npm/v/@aevatar/kit-core?label=) |
 | [`@aevatar/kit-react`](./packages/kit-react) | React components (43+) | ![npm](https://img.shields.io/npm/v/@aevatar/kit-react?label=) |
 | [`@aevatar/kit-a2ui`](./packages/kit-a2ui) | A2UI rendering engine | ![npm](https://img.shields.io/npm/v/@aevatar/kit-a2ui?label=) |
@@ -133,18 +246,29 @@ stream.connect();
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Your Application                         │
+│                     Your Application                        │
 ├─────────────────────────────────────────────────────────────┤
-│                      @aevatar/kit                            │
-│         (Unified entry - re-exports all packages)           │
-├──────────────┬──────────────┬───────────────┬───────────────┤
-│  kit-react   │   kit-a2ui   │   kit-core    │  kit-protocol │
-│  (Components)│  (A2UI Engine)│  (Client)     │  (AG-UI SSE)  │
-├──────────────┴──────────────┴───────────────┴───────────────┤
-│                      @aevatar/kit-types                      │
-│                    (Shared type definitions)                │
+│                      @aevatar/kit                           │
+│         (Unified entry - re-exports all packages)          │
+├──────────────┬──────────────┬───────────────┬──────────────┤
+│  kit-react   │   kit-a2ui   │   kit-core    │ kit-protocol │
+│  (Components)│ (A2UI Engine)│  (Client)     │ (AG-UI SSE)  │
+├──────────────┴──────────────┴───────────────┴──────────────┤
+│                      @aevatar/kit-types                     │
+│                    (Shared type definitions)               │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+### kit-protocol Utilities
+
+| Utility | Description |
+|---------|-------------|
+| `createEventStream` | High-level SSE stream with rich callbacks |
+| `createEventRouter` | Type-safe event routing with batch registration |
+| `createConnection` | Low-level SSE connection with metrics |
+| `bindMessageAggregation` | Auto TEXT_MESSAGE_* handling |
+| `applyJsonPatch` | RFC 6902 JSON Patch for STATE_DELTA |
+| `parseMessageId` | Parse structured message IDs |
 
 ## 🔧 API Reference
 
@@ -323,7 +447,7 @@ This SDK implements the [AG-UI Protocol](https://docs.ag-ui.com/) for standardiz
 | Demo | Description |
 |------|-------------|
 | [basic-demo](./examples/basic-demo) | Full-featured chat with `@aevatar/kit` |
-| [axiom-demo](./examples/axiom-demo) | Protocol-only usage with custom API |
+| [axiom-demo](./examples/axiom-demo) | **🆕 Protocol-only with new SDK features** |
 | [minimal-demo](./examples/minimal-demo) | Pure TypeScript, no React |
 | [a2ui-demo](./examples/a2ui-demo) | JSON → UI dynamic rendering |
 | [molecule-demo](./examples/molecule-demo) | 3D molecule viewer component |
@@ -331,6 +455,9 @@ This SDK implements the [AG-UI Protocol](https://docs.ag-ui.com/) for standardiz
 ```bash
 # Run examples
 cd examples/basic-demo && pnpm dev
+
+# Run axiom-demo to see new SDK features
+cd examples/axiom-demo && pnpm dev
 ```
 
 ## 🔧 Custom Backend Adapter
@@ -387,6 +514,7 @@ pnpm release
 - [SDK Design](./docs/AEVATARKIT_SDK_DESIGN.md) - Architecture and design decisions
 - [A2UI Integration](./docs/A2UI_INTEGRATION_FEASIBILITY.md) - A2UI protocol details
 - [Theme System](./docs/THEME_SYSTEM.md) - Theming and customization
+- [kit-protocol Architecture](./packages/kit-protocol/docs/ARCHITECTURE.md) - Protocol layer details
 
 ## 📄 License
 

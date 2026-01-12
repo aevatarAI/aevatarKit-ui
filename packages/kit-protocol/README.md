@@ -14,8 +14,10 @@ This package is **protocol-only**. It does not:
 It only:
 
 - ✅ Implements AG-UI protocol (SSE parsing, event routing)
-- ✅ Provides typed event stream
-- ✅ Handles connection management
+- ✅ Provides typed event stream with rich callbacks
+- ✅ Handles connection management with metrics
+- ✅ JSON Patch (RFC 6902) for STATE_DELTA
+- ✅ Message buffer for TEXT_MESSAGE_* aggregation
 - ✅ Supports Aevatar extensions (optional)
 
 ## Installation
@@ -30,107 +32,182 @@ pnpm add @aevatar/kit-protocol @aevatar/kit-types
 
 ```ts
 import { createEventStream } from '@aevatar/kit-protocol';
-import type { AgUiEvent } from '@aevatar/kit-types';
 
-// YOU provide the URL - we make no assumptions
 const stream = createEventStream({
-  url: 'http://localhost:5000/api/sessions/abc/agui/events',
+  url: 'http://localhost:5000/api/sessions/abc/events',
   autoReconnect: true,
+  onReconnecting: (attempt, max, delay) => {
+    console.log(`Reconnecting ${attempt}/${max} in ${delay}ms`);
+  },
+  onReconnectFailed: () => {
+    console.error('Connection lost permanently');
+  },
 });
 
-stream.on('TEXT_MESSAGE_CONTENT', (e) => {
-  console.log(e.delta); // Streaming text
+stream.on('TEXT_MESSAGE_CONTENT', (e) => console.log(e.delta));
+stream.on('RUN_FINISHED', (e) => stream.disconnect());
+
+stream.connect();
+```
+
+### Type-Safe Custom Events
+
+```ts
+import { createEventStream } from '@aevatar/kit-protocol';
+
+// Define your custom event types
+interface MyEvents {
+  'worker.update': { id: string; status: string };
+  'task.complete': { taskId: string; result: unknown };
+}
+
+// Create a type-safe stream
+const stream = createEventStream<MyEvents>({
+  url: '/api/events',
 });
 
-stream.on('RUN_FINISHED', (e) => {
-  console.log('Done:', e.result);
-  stream.disconnect();
-});
-
-stream.onStatusChange((status) => {
-  console.log('Status:', status);
+// event.value is typed as { id: string; status: string }
+stream.onCustom('worker.update', (event) => {
+  console.log(event.value.id, event.value.status);
 });
 
 stream.connect();
 ```
 
-### React Hook Pattern
+### Batch Event Registration
 
-```tsx
-import { useEffect, useState } from 'react';
+```ts
 import { createEventStream } from '@aevatar/kit-protocol';
-import type { AgUiEvent } from '@aevatar/kit-types';
-
-function useAgUiStream(url: string | null) {
-  const [events, setEvents] = useState<AgUiEvent[]>([]);
-  const [status, setStatus] = useState('disconnected');
-
-  useEffect(() => {
-    if (!url) return;
 
     const stream = createEventStream({
-      url,
-      autoReconnect: true,
-      onStatusChange: setStatus,
-    });
-
-    stream.onAny((event) => {
-      setEvents((prev) => [...prev, event]);
+  url: '/api/events',
+  router: {
+    standard: {
+      RUN_STARTED: () => console.log('Started'),
+      RUN_FINISHED: () => console.log('Finished'),
+      TEXT_MESSAGE_CONTENT: (e) => console.log(e.delta),
+    },
+    custom: {
+      'app.progress': (e) => console.log('Progress:', e.value),
+    },
+  },
     });
 
     stream.connect();
-
-    return () => stream.disconnect();
-  }, [url]);
-
-  return { events, status };
-}
 ```
 
-## API
+### Message Aggregation
+
+```ts
+import { createEventRouter, bindMessageAggregation } from '@aevatar/kit-protocol';
+
+const router = createEventRouter();
+
+const { buffer, unsubscribe } = bindMessageAggregation(router, {
+  onMessageStart: (id) => console.log('Started:', id),
+  onMessageChunk: (id, content) => updateUI(content),
+  onMessageComplete: (id, content) => saveMessage(content),
+});
+
+// Route events (from your SSE connection)
+router.route(event);
+```
+
+### JSON Patch for State Updates
+
+```ts
+import { applyJsonPatch } from '@aevatar/kit-protocol';
+
+const state = { count: 0, items: [] };
+
+stream.on('STATE_DELTA', (event) => {
+  const newState = applyJsonPatch(state, event.delta);
+  console.log('New state:', newState);
+});
+```
+
+## API Reference
 
 ### `createEventStream(options)`
 
-Create an AG-UI event stream from any SSE endpoint.
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `url` | `string` | - | SSE endpoint URL |
+| `autoReconnect` | `boolean` | `true` | Auto reconnect on disconnect |
+| `reconnectDelayMs` | `number` | `1000` | Initial reconnect delay |
+| `maxReconnectAttempts` | `number` | `10` | Max reconnect attempts |
+| `onStatusChange` | `(status) => void` | - | Status change callback |
+| `onError` | `(error, context) => void` | - | Error with context |
+| `onReconnecting` | `(attempt, max, delay) => void` | - | Reconnection attempt |
+| `onReconnectFailed` | `(context) => void` | - | All attempts failed |
+| `onReconnected` | `() => void` | - | Successfully reconnected |
+| `router` | `EventRouterOptions` | - | Batch event registration |
 
-**Options:**
-- `url: string` - SSE endpoint URL (you provide this)
-- `autoReconnect?: boolean` - Auto reconnect on disconnect (default: `true`)
-- `reconnectDelayMs?: number` - Reconnect delay (default: `1000`)
-- `maxReconnectAttempts?: number` - Max reconnect attempts (default: `10`)
-- `onStatusChange?: (status) => void` - Status change callback
-- `onError?: (error) => void` - Error callback
-
-**Returns:**
-- `stream.connect()` - Connect to SSE endpoint
-- `stream.disconnect()` - Disconnect
-- `stream.reconnect()` - Force reconnect
-- `stream.on(type, handler)` - Subscribe to specific event type
-- `stream.onAny(handler)` - Subscribe to all events
-- `stream.onCustom(name, handler)` - Subscribe to CUSTOM events by name
-- `stream.onAevatar(name, handler)` - Subscribe to Aevatar extension events
-- `stream.onStatusChange(handler)` - Subscribe to status changes
-- `stream.onError(handler)` - Subscribe to errors
-- `stream.status` - Current connection status
-
-### `parseAgUiEvent(data)`
-
-Parse a single SSE data string into an AG-UI event.
+**Methods:**
 
 ```ts
-import { parseAgUiEvent } from '@aevatar/kit-protocol';
-
-const event = parseAgUiEvent('{"type":"TEXT_MESSAGE_CONTENT","delta":"Hello"}');
-if (event) {
-  console.log(event.type); // "TEXT_MESSAGE_CONTENT"
-}
+stream.connect()      // Connect to SSE
+stream.disconnect()   // Disconnect
+stream.reconnect()    // Force reconnect
+stream.on(type, fn)   // Subscribe to event type
+stream.onCustom(name, fn)   // Subscribe to CUSTOM by name
+stream.onAevatar(name, fn)  // Subscribe to Aevatar events
+stream.onAny(fn)      // Subscribe to all events
+stream.getMetrics()   // Get connection metrics
+stream.getRouter()    // Get underlying router
 ```
 
-### `createConnection(options)`
+### `createEventRouter<T>(options?)`
 
-Low-level SSE connection (used by `createEventStream`).
+Type-safe event router with batch registration.
 
-## Design Decisions
+```ts
+const router = createEventRouter<MyCustomEvents>({
+  standard: { RUN_STARTED: (e) => {} },
+  custom: { 'my.event': (e) => {} },
+});
+
+// Later: batch register more
+const unsub = router.registerStandard({
+  RUN_FINISHED: (e) => {},
+});
+```
+
+### `applyJsonPatch(target, operations)`
+
+Apply RFC 6902 JSON Patch operations (immutable).
+
+```ts
+const result = applyJsonPatch(obj, [
+  { op: 'replace', path: '/count', value: 1 },
+  { op: 'add', path: '/items/-', value: 'new' },
+]);
+```
+
+### `createMessageBuffer()`
+
+Low-level message buffer for manual control.
+
+```ts
+const buffer = createMessageBuffer();
+buffer.start('msg-1');
+buffer.append('msg-1', 'chunk');
+const final = buffer.end('msg-1');
+```
+
+### `bindMessageAggregation(router, callbacks)`
+
+Auto-bind TEXT_MESSAGE_* events to callbacks.
+
+```ts
+const { buffer, unsubscribe } = bindMessageAggregation(router, {
+  onMessageStart: (id) => {},
+  onMessageChunk: (id, accumulated, delta) => {},
+  onMessageComplete: (id, fullContent) => {},
+});
+```
+
+## Design Philosophy
 
 ### Why no session/run management?
 
@@ -141,20 +218,13 @@ Different backends have different:
 
 The protocol layer shouldn't know about these.
 
-### Why keep CUSTOM events generic?
+### Why type-safe custom events?
 
-CUSTOM events are for application-specific extensions. We parse them but don't interpret them (except Aevatar extensions).
+Business applications need to extend AG-UI with domain events. Type safety catches errors at compile time rather than runtime.
 
-```ts
-stream.onCustom('my.app.progress', (e) => {
-  // Your interpretation
-  const progress = e.value as { percent: number };
-});
-```
+### Why separate JSON Patch utility?
 
-### Why depend on `kit-types`?
-
-`kit-types` contains AG-UI type definitions which are part of the protocol specification. Business types (Session, Run, Agent) are separate concerns.
+STATE_DELTA events use RFC 6902. Providing a correct implementation avoids every consumer re-implementing it.
 
 ## License
 

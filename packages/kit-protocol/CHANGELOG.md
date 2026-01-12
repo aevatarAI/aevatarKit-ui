@@ -1,5 +1,15 @@
 # @aevatar/kit-protocol
 
+## 1.2.0
+
+### Minor Changes
+
+- feat(kit-protocol): add JSON Patch and Message Buffer support
+  - Add `json-patch.ts`: RFC 6902 compliant JSON Patch implementation for efficient state delta operations
+  - Add `message-buffer.ts`: intelligent message buffering with priority queue and batch processing
+  - Update connection, router, stream modules for enhanced message handling
+  - Export new utilities via kit-protocol and kit entry points
+
 ## 1.0.0
 
 ### Patch Changes
