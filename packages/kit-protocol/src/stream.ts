@@ -27,6 +27,7 @@ import {
   type EventRouter,
   type CustomEventMap,
   type EventRouterOptions,
+  type TypedAevatarEvent,
 } from './router';
 import type { AevatarCustomEventName } from './extensions';
 
@@ -68,10 +69,13 @@ export interface EventStream<T extends CustomEventMap = CustomEventMap> {
   /** Subscribe to CUSTOM events by name (untyped) */
   onCustom(name: string, handler: EventHandler<CustomEvent>): Unsubscribe;
   
-  /** Subscribe to Aevatar extension events */
+  /**
+   * Subscribe to Aevatar extension events
+   * Event value is automatically typed based on event name
+   */
   onAevatar<K extends AevatarCustomEventName>(
     name: K,
-    handler: EventHandler<CustomEvent>
+    handler: EventHandler<TypedAevatarEvent<K>>
   ): Unsubscribe;
   
   /** Subscribe to all events */
@@ -171,6 +175,17 @@ export function createEventStream<T extends CustomEventMap = CustomEventMap>(
   let unsubscribeMessage: Unsubscribe | null = null;
 
   // ───────────────────────────────────────────────────────────────────────────
+  // Handler Queues (for pre-connect registration)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  // Handlers registered before connect() - will be bound after connection created
+  const pendingStatusHandlers = new Set<(status: StreamStatus) => void>();
+  const pendingErrorHandlers = new Set<(error: Error, context: ErrorContext) => void>();
+  
+  // Track current status for immediate callback
+  let currentStatus: StreamStatus = 'disconnected';
+
+  // ───────────────────────────────────────────────────────────────────────────
   // Message Handler
   // ───────────────────────────────────────────────────────────────────────────
 
@@ -179,6 +194,37 @@ export function createEventStream<T extends CustomEventMap = CustomEventMap>(
     if (event) {
       router.route(event);
     }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Status Change Handler (aggregates all listeners)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  function notifyStatusChange(status: StreamStatus): void {
+    currentStatus = status;
+    // Notify options callback
+    options.onStatusChange?.(status);
+    // Notify all registered handlers
+    pendingStatusHandlers.forEach((handler) => {
+      try {
+        handler(status);
+      } catch (error) {
+        console.error('[EventStream] Status handler error:', error);
+      }
+    });
+  }
+
+  function notifyError(error: Error, context: ErrorContext): void {
+    // Notify options callback
+    options.onError?.(error, context);
+    // Notify all registered handlers
+    pendingErrorHandlers.forEach((handler) => {
+      try {
+        handler(error, context);
+      } catch (err) {
+        console.error('[EventStream] Error handler error:', err);
+      }
+    });
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -192,8 +238,8 @@ export function createEventStream<T extends CustomEventMap = CustomEventMap>(
 
     connection = createConnection({
       ...options,
-      onStatusChange: options.onStatusChange,
-      onError: options.onError,
+      onStatusChange: notifyStatusChange,
+      onError: notifyError,
       onReconnecting: options.onReconnecting,
       onReconnectFailed: options.onReconnectFailed,
       onReconnected: options.onReconnected,
@@ -214,6 +260,7 @@ export function createEventStream<T extends CustomEventMap = CustomEventMap>(
       connection = null;
     }
     
+    currentStatus = 'disconnected';
     router.clear();
   }
 
@@ -237,7 +284,7 @@ export function createEventStream<T extends CustomEventMap = CustomEventMap>(
 
   function onAevatar<K extends AevatarCustomEventName>(
     name: K,
-    handler: EventHandler<CustomEvent>
+    handler: EventHandler<TypedAevatarEvent<K>>
   ): Unsubscribe {
     return router.onAevatar(name, handler);
   }
@@ -246,20 +293,36 @@ export function createEventStream<T extends CustomEventMap = CustomEventMap>(
     return router.onAny(handler);
   }
 
+  /**
+   * Subscribe to status changes
+   * Can be called before or after connect()
+   */
   function onStatusChange(handler: (status: StreamStatus) => void): Unsubscribe {
-    return connection?.onStatusChange(handler) ?? (() => {});
+    pendingStatusHandlers.add(handler);
+    // Immediately notify current status
+    handler(currentStatus);
+    return () => {
+      pendingStatusHandlers.delete(handler);
+    };
   }
 
+  /**
+   * Subscribe to errors with context
+   * Can be called before or after connect()
+   */
   function onError(
     handler: (error: Error, context: ErrorContext) => void
   ): Unsubscribe {
-    return connection?.onError(handler) ?? (() => {});
+    pendingErrorHandlers.add(handler);
+    return () => {
+      pendingErrorHandlers.delete(handler);
+    };
   }
 
   function getMetrics(): ConnectionMetrics {
     return (
       connection?.getMetrics() ?? {
-        status: 'disconnected',
+        status: currentStatus,
         totalConnectAttempts: 0,
         successfulConnections: 0,
         currentReconnectAttempt: 0,
@@ -276,7 +339,7 @@ export function createEventStream<T extends CustomEventMap = CustomEventMap>(
 
   return {
     get status() {
-      return connection?.status ?? 'disconnected';
+      return currentStatus;
     },
     connect,
     disconnect,

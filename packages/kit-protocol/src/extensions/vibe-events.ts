@@ -1,14 +1,155 @@
 /**
  * ============================================================================
- * Vibe Event Names
+ * Vibe Event Names & Types
  * ============================================================================
- * Well-known CUSTOM event names for Vibe Researching system
+ * Well-known CUSTOM event names and value types for Vibe Researching system
  * Mirrors backend VibeEventNames constants
  * ============================================================================
  */
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Vibe Core Events
+// Vibe Event Value Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Agent roster item in agents_snapshot
+ */
+export interface VibeAgentRosterItem {
+  agent: string;
+  agentId?: string;
+  description?: string;
+  capabilities?: string[];
+}
+
+/**
+ * Value for aevatar.vibe.agents_snapshot
+ */
+export interface VibeAgentsSnapshotValue {
+  agents: VibeAgentRosterItem[];
+}
+
+/**
+ * Value for aevatar.vibe.agent_providers_snapshot
+ */
+export interface VibeAgentProvidersSnapshotValue {
+  providers: Record<string, string>;
+}
+
+/**
+ * Value for aevatar.vibe.message_meta
+ * Per-message metadata linking to agent/step/provider
+ */
+export interface VibeMessageMetaValue {
+  messageId: string;
+  agent: string;
+  stepName?: string;
+  providerName?: string;
+  runId?: string;
+}
+
+/**
+ * DAG Node in snapshot
+ */
+export interface VibeDagNode {
+  id: string;
+  label?: string;
+  type?: string;
+  kind?: 'Plan' | 'Knowledge';
+  status?: string;
+  owner?: string;
+  proof?: string;
+  attestations?: Array<{ pubkey?: string; signature?: string }>;
+  attestationsCount?: number;
+  sessionId?: string;
+  planStatus?: 'Pending' | 'Active' | 'Completed';
+}
+
+/**
+ * DAG Edge in snapshot
+ */
+export interface VibeDagEdge {
+  fromId: string;
+  toId: string;
+  type?: string;
+}
+
+/**
+ * Value for aevatar.vibe.dag_snapshot
+ */
+export interface VibeDagSnapshotValue {
+  sessionId?: string;
+  updatedAt?: string;
+  nodes: VibeDagNode[];
+  edges: VibeDagEdge[];
+  truncated?: boolean;
+}
+
+/**
+ * Value for aevatar.vibe.dag_updated
+ */
+export interface VibeDagUpdatedValue {
+  sessionId?: string;
+  reason?: string;
+  affectedNodeIds?: string[];
+}
+
+/**
+ * Value for aevatar.vibe.milestone_started
+ */
+export interface VibeMilestoneStartedValue {
+  sessionId?: string;
+  milestoneNodeId: string;
+  milestoneIndex?: number;
+  totalMilestones?: number;
+  title?: string;
+}
+
+/**
+ * Value for aevatar.vibe.milestone_finished
+ */
+export interface VibeMilestoneFinishedValue {
+  sessionId?: string;
+  milestoneNodeId: string;
+  milestoneIndex?: number;
+  success?: boolean;
+  error?: string;
+}
+
+/**
+ * Value for aevatar.vibe.milestone_error
+ */
+export interface VibeMilestoneErrorValue {
+  sessionId?: string;
+  milestoneNodeId: string;
+  error: string;
+  recoverable?: boolean;
+}
+
+/**
+ * Value for aevatar.vibe.brief_updated / brief_snapshot
+ */
+export interface VibeBriefValue {
+  sessionId?: string;
+  title?: string;
+  summary?: string;
+  keywords?: string[];
+  sources?: string[];
+  updatedAt?: string;
+}
+
+/**
+ * Value for aevatar.vibe.round_summary
+ */
+export interface VibeRoundSummaryValue {
+  sessionId?: string;
+  round: number;
+  summary: string;
+  keyFindings?: string[];
+  nextSteps?: string[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Vibe Core Event Names
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -91,6 +232,108 @@ export const ScientificEventNames = {
 } as const;
 
 export type ScientificEventName = typeof ScientificEventNames[keyof typeof ScientificEventNames];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scientific Event Value Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Tool summary in tools_snapshot
+ */
+export interface ScientificToolSummary {
+  name: string;
+  description?: string;
+  category?: string;
+  source?: 'MCP' | 'AGENT_SKILLS' | string;
+  tags?: string[];
+}
+
+/**
+ * Value for aevatar.scientific.tools_snapshot
+ */
+export interface ScientificToolsSnapshotValue {
+  tools: ScientificToolSummary[];
+}
+
+/**
+ * Value for aevatar.scientific.session
+ */
+export interface ScientificSessionValue {
+  runId?: string;
+  prompt?: string;
+  mode?: 'chat' | 'vibe' | 'vibe_loop';
+  sessionId?: string;
+}
+
+/**
+ * Value for aevatar.scientific.tool_start
+ */
+export interface ScientificToolStartValue {
+  runId: string;
+  toolCallId: string;
+  toolName: string;
+  isMcp?: boolean;
+  args?: Record<string, unknown>;
+}
+
+/**
+ * Value for aevatar.scientific.tool_end
+ */
+export interface ScientificToolEndValue {
+  runId: string;
+  toolCallId: string;
+  toolName: string;
+  isMcp?: boolean;
+  success: boolean;
+  durationMs?: number;
+  error?: string;
+  resultPreview?: string;
+}
+
+/**
+ * Value for aevatar.scientific.mcp_reconnect_started
+ */
+export interface ScientificMcpReconnectStartedValue {
+  sessionId?: string;
+  reason?: string;
+}
+
+/**
+ * Value for aevatar.scientific.mcp_reconnect_finished
+ */
+export interface ScientificMcpReconnectFinishedValue {
+  sessionId?: string;
+  toolsCount?: number;
+}
+
+/**
+ * Value for aevatar.scientific.mcp_reconnect_error
+ */
+export interface ScientificMcpReconnectErrorValue {
+  sessionId?: string;
+  error: string;
+}
+
+/**
+ * Value for aevatar.axiom.status_snapshot
+ */
+export interface AxiomStatusSnapshotValue {
+  status: string;
+  phase: string;
+  progressPercent: number;
+  totalTokens?: number;
+  totalLlmCalls?: number;
+}
+
+/**
+ * Axiom-specific event names
+ */
+export const AxiomEventNames = {
+  STATUS_SNAPSHOT: 'aevatar.axiom.status_snapshot',
+  GRAPH: 'aevatar.axiom.graph',
+} as const;
+
+export type AxiomEventName = typeof AxiomEventNames[keyof typeof AxiomEventNames];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UI Events

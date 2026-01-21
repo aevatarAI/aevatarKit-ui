@@ -51,6 +51,7 @@ export {
   type CustomEventHandlers,
   type CustomEventMap,
   type TypedCustomEvent,
+  type TypedAevatarEvent,
 } from './router';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,6 +76,13 @@ export {
   type MessageAggregation,
   type MessageAggregationCallbacks,
   type ParsedMessageId,
+  // Tool Aggregation
+  createToolBuffer,
+  bindToolAggregation,
+  type ToolBuffer,
+  type ToolOutputState,
+  type ToolAggregation,
+  type ToolAggregationCallbacks,
 } from './message-buffer';
 
 // ─────────────────────────────────────────────────────────────────────────────

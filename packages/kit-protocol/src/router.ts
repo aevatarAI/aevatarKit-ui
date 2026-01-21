@@ -14,7 +14,7 @@ import type {
   Unsubscribe,
   EventHandler,
 } from '@aevatar/kit-types';
-import type { AevatarCustomEventName } from './extensions';
+import type { AevatarCustomEventName, AevatarCustomEventMap } from './extensions';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -70,6 +70,14 @@ export interface EventRouterOptions<T extends CustomEventMap = CustomEventMap> {
 }
 
 /**
+ * Typed custom event for Aevatar events
+ */
+export interface TypedAevatarEvent<K extends AevatarCustomEventName> extends Omit<CustomEvent, 'value'> {
+  name: K;
+  value: K extends keyof AevatarCustomEventMap ? AevatarCustomEventMap[K] : unknown;
+}
+
+/**
  * Event Router interface
  */
 export interface EventRouter<T extends CustomEventMap = CustomEventMap> {
@@ -97,10 +105,13 @@ export interface EventRouter<T extends CustomEventMap = CustomEventMap> {
    */
   onCustom(name: string, handler: EventHandler<CustomEvent>): Unsubscribe;
   
-  /** Register handler for Aevatar extension events */
+  /**
+   * Register handler for Aevatar extension events
+   * Event value is automatically typed based on event name
+   */
   onAevatar<K extends AevatarCustomEventName>(
     name: K,
-    handler: EventHandler<CustomEvent>
+    handler: EventHandler<TypedAevatarEvent<K>>
   ): Unsubscribe;
   
   /** Register handler for all events */
@@ -234,9 +245,10 @@ export function createEventRouter<T extends CustomEventMap = CustomEventMap>(
 
   function onAevatar<K extends AevatarCustomEventName>(
     name: K,
-    handler: EventHandler<CustomEvent>
+    handler: EventHandler<TypedAevatarEvent<K>>
   ): Unsubscribe {
-    return onCustom(name, handler);
+    // Cast is safe because TypedAevatarEvent extends CustomEvent structure
+    return onCustom(name, handler as EventHandler<CustomEvent>);
   }
 
   function onAny(handler: EventHandler<AgUiEvent>): Unsubscribe {
