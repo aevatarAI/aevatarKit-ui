@@ -1,5 +1,11 @@
 # @aevatar/kit-types
 
+## 1.2.1
+
+### Patch Changes
+
+- chore: bump version to 1.2.1
+
 ## 0.3.0
 
 ### Minor Changes

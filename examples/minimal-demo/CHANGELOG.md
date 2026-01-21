@@ -1,5 +1,14 @@
 # aevatar-kit-minimal-demo
 
+## 0.1.5
+
+### Patch Changes
+
+- Updated dependencies
+  - @aevatar/kit-protocol@1.2.1
+  - @aevatar/kit-core@1.2.1
+  - @aevatar/kit-types@1.2.1
+
 ## 0.1.4
 
 ### Patch Changes

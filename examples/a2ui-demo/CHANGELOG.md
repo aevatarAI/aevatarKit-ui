@@ -1,5 +1,15 @@
 # aevatar-kit-a2ui-demo
 
+## 0.1.5
+
+### Patch Changes
+
+- Updated dependencies
+  - @aevatar/kit@1.2.1
+  - @aevatar/kit-a2ui@1.2.1
+  - @aevatar/kit-react@1.2.1
+  - @aevatar/kit-types@1.2.1
+
 ## 0.1.4
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # @aevatar/kit
 
+## 1.2.1
+
+### Patch Changes
+
+- chore: bump version to 1.2.1
+- Updated dependencies
+  - @aevatar/kit-protocol@1.2.1
+  - @aevatar/kit-core@1.2.1
+  - @aevatar/kit-a2ui@1.2.1
+  - @aevatar/kit-react@1.2.1
+  - @aevatar/kit-types@1.2.1
+
 ## 1.2.0
 
 ### Minor Changes
