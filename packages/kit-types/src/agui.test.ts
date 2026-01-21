@@ -47,6 +47,7 @@ const createRunStartedEvent = (): RunStartedEvent => ({
 const createRunFinishedEvent = (): RunFinishedEvent => ({
   type: 'RUN_FINISHED',
   runId: 'run-123',
+  threadId: 'thread-456',
   result: { success: true },
 });
 
@@ -160,6 +161,7 @@ describe('Lifecycle Event Type Guards', () => {
     it('should return false for STEP_FINISHED event', () => {
       const event: AgUiEvent = {
         type: 'STEP_FINISHED',
+        stepName: 'reasoning',
         stepId: 'step-1',
       };
       expect(isStepStartedEvent(event)).toBe(false);
@@ -170,6 +172,7 @@ describe('Lifecycle Event Type Guards', () => {
     it('should return true for STEP_FINISHED event', () => {
       const event: AgUiEvent = {
         type: 'STEP_FINISHED',
+        stepName: 'reasoning',
         stepId: 'step-1',
         result: { output: 'done' },
       };
@@ -242,6 +245,7 @@ describe('Tool Call Event Type Guards', () => {
     it('should return true for TOOL_CALL_START event', () => {
       const event: AgUiEvent = {
         type: 'TOOL_CALL_START',
+        messageId: 'msg-001',
         toolCallId: 'tc-001',
         toolName: 'search',
         parentMessageId: 'msg-001',
@@ -252,6 +256,7 @@ describe('Tool Call Event Type Guards', () => {
     it('should return false for TOOL_CALL_RESULT event', () => {
       const event: AgUiEvent = {
         type: 'TOOL_CALL_RESULT',
+        messageId: 'msg-001',
         toolCallId: 'tc-001',
         result: '{"data": []}',
       };
@@ -263,6 +268,7 @@ describe('Tool Call Event Type Guards', () => {
     it('should return true for TOOL_CALL_RESULT event', () => {
       const event: AgUiEvent = {
         type: 'TOOL_CALL_RESULT',
+        messageId: 'msg-001',
         toolCallId: 'tc-001',
         result: '{"success": true}',
       };
@@ -272,6 +278,7 @@ describe('Tool Call Event Type Guards', () => {
     it('should narrow type to access result', () => {
       const event: AgUiEvent = {
         type: 'TOOL_CALL_RESULT',
+        messageId: 'msg-001',
         toolCallId: 'tc-001',
         result: '{"success": true}',
       };
@@ -398,6 +405,7 @@ describe('Edge Cases', () => {
     const minimalRunStarted: RunStartedEvent = {
       type: 'RUN_STARTED',
       runId: 'run-minimal',
+      threadId: 'thread-minimal',
     };
     expect(isRunStartedEvent(minimalRunStarted)).toBe(true);
   });
@@ -406,6 +414,7 @@ describe('Edge Cases', () => {
     const eventWithExtra = {
       type: 'RUN_STARTED' as const,
       runId: 'run-123',
+      threadId: 'thread-456',
       extraField: 'should be ignored',
       nested: { data: true },
     };

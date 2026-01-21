@@ -16,11 +16,15 @@ import {
   createEventStream,
   createEventRouter,
   bindMessageAggregation,
+  // NEW: Workflow event types
+  parseDagConsensusNodeId,
+  isConsensusReached,
   type EventStream,
   type StreamStatus,
   type CustomEventMap,
   type ErrorContext,
   type ConnectionMetrics,
+  type WorkflowExecutionEventValue,
 } from '@aevatar/kit-protocol';
 import type { AgUiEvent, AgUiMessage } from '@aevatar/kit-types';
 import { isMessagesSnapshotEvent } from '@aevatar/kit-types';
@@ -71,6 +75,9 @@ interface AxiomCustomEvents extends CustomEventMap {
     theorem: string;
     proof: string;
   };
+  // NEW: Workflow execution events
+  'aevatar.workflow.execution_event': WorkflowExecutionEventValue;
+  'aevatar.llm.trace': WorkflowExecutionEventValue;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -92,6 +99,16 @@ A2: Socrates is a human`,
 // Custom Hook (Using NEW SDK Features)
 // ─────────────────────────────────────────────────────────────────────────────
 
+interface DagConsensusInfo {
+  stepId: string;
+  isProposal: boolean;
+  proposalIndex: number | null;
+  consensusReached: boolean;
+  voteRound?: number;
+  voteK?: number;
+  currentVotes?: number;
+}
+
 interface StreamState {
   events: AgUiEvent[];
   messages: AgUiMessage[];
@@ -102,6 +119,8 @@ interface StreamState {
   status: StreamStatus;
   metrics: ConnectionMetrics | null;
   reconnectInfo: { attempt: number; max: number; delay: number } | null;
+  // NEW: DAG consensus tracking
+  dagConsensus: DagConsensusInfo | null;
 }
 
 function useAgUiStream(url: string | null) {
@@ -115,6 +134,7 @@ function useAgUiStream(url: string | null) {
     status: 'disconnected',
     metrics: null,
     reconnectInfo: null,
+    dagConsensus: null,
   });
 
   const streamRef = useRef<EventStream<AxiomCustomEvents> | null>(null);
@@ -196,6 +216,35 @@ function useAgUiStream(url: string | null) {
       }));
     });
 
+    // NEW: Handle workflow execution events with DAG consensus parsing
+    const unsubWorkflow = router.onCustom('aevatar.workflow.execution_event', (event) => {
+      const value = event.value;
+      const parsed = parseDagConsensusNodeId(value.nodeId);
+      
+      if (parsed.isDagConsensus) {
+        const consensusReached = isConsensusReached(value);
+        setState((s) => ({
+          ...s,
+          dagConsensus: {
+            stepId: parsed.stepId || value.nodeId,
+            isProposal: parsed.isProposal,
+            proposalIndex: parsed.proposalIndex,
+            consensusReached,
+            voteRound: value.fields.vote_round,
+            voteK: value.fields.vote_k,
+            currentVotes: value.fields.vote_current_votes,
+          },
+          progress: {
+            ...s.progress,
+            phase: value.phase,
+            progressPercent: (value.fields.progress ?? 0) * 100,
+            llmCalls: value.fields.llm_calls,
+            totalTokens: value.fields.tokens_used,
+          },
+        }));
+      }
+    });
+
     // Collect all events for display
     router.onAny((event) => {
       setState((s) => ({ ...s, events: [...s.events, event] }));
@@ -252,6 +301,7 @@ function useAgUiStream(url: string | null) {
       unsubStandard();
       unsubProgress();
       unsubSnapshot();
+      unsubWorkflow();
       stream.disconnect();
       streamRef.current = null;
     };
@@ -285,6 +335,7 @@ export default function App() {
     status,
     metrics,
     reconnectInfo,
+    dagConsensus,
   } = useAgUiStream(sseUrl);
 
   const isRunning = runStatus === 'running';
@@ -470,6 +521,33 @@ export default function App() {
             </div>
           )}
 
+          {/* DAG Consensus Section (NEW) */}
+          {dagConsensus && (
+            <div className="config-section">
+              <h3>🔄 DAG Consensus</h3>
+              <div className="status-bar">
+                <div className="status-item">
+                  <span className="label">Step:</span>
+                  <span className="value">{dagConsensus.stepId}</span>
+                </div>
+                {dagConsensus.voteRound !== undefined && (
+                  <div className="status-item">
+                    <span className="label">Vote:</span>
+                    <span className="value">
+                      {dagConsensus.currentVotes}/{dagConsensus.voteK} (round {dagConsensus.voteRound})
+                    </span>
+                  </div>
+                )}
+                <div className="status-item">
+                  <span className="label">Consensus:</span>
+                  <span className={`value ${dagConsensus.consensusReached ? 'success' : ''}`}>
+                    {dagConsensus.consensusReached ? '✓ Reached' : 'Pending'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* SDK Features Section (NEW) */}
           <div className="config-section sdk-features">
             <h3>🆕 SDK Features Used</h3>
@@ -480,6 +558,9 @@ export default function App() {
               <li>✅ onReconnecting / onReconnected</li>
               <li>✅ ErrorContext with metrics</li>
               <li>✅ getMetrics() for monitoring</li>
+              <li>✅ WorkflowExecutionEventValue</li>
+              <li>✅ parseDagConsensusNodeId</li>
+              <li>✅ isConsensusReached</li>
             </ul>
           </div>
         </aside>

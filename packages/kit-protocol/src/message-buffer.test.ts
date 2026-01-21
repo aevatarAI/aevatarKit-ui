@@ -92,6 +92,7 @@ describe('bindMessageAggregation', () => {
     router.route({
       type: 'TEXT_MESSAGE_START',
       messageId: 'msg-1',
+      role: 'assistant',
       timestamp: Date.now(),
     });
 
@@ -107,6 +108,7 @@ describe('bindMessageAggregation', () => {
     router.route({
       type: 'TEXT_MESSAGE_START',
       messageId: 'msg-1',
+      role: 'assistant',
       timestamp: Date.now(),
     });
 
@@ -138,6 +140,7 @@ describe('bindMessageAggregation', () => {
     router.route({
       type: 'TEXT_MESSAGE_START',
       messageId: 'msg-1',
+      role: 'assistant',
       timestamp: Date.now(),
     });
 
@@ -171,6 +174,7 @@ describe('bindMessageAggregation', () => {
     router.route({
       type: 'TEXT_MESSAGE_START',
       messageId: 'msg-1',
+      role: 'assistant',
       timestamp: Date.now(),
     });
 
@@ -187,6 +191,7 @@ describe('bindMessageAggregation', () => {
     router.route({
       type: 'TEXT_MESSAGE_START',
       messageId: 'msg-2',
+      role: 'assistant',
       timestamp: Date.now(),
     });
 

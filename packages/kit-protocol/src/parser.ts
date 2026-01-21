@@ -8,6 +8,7 @@
 
 import type { AgUiEvent, CustomEvent } from '@aevatar/kit-types';
 import type { AevatarCustomEvent, AevatarCustomEventName } from './extensions';
+import { AevatarEventNames } from './extensions';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Parser
@@ -68,7 +69,11 @@ export function parseCustomEvent<T extends AevatarCustomEventName>(
 // Type Guards
 // ─────────────────────────────────────────────────────────────────────────────
 
-const AEVATAR_EVENT_NAMES = [
+/** Set of all known Aevatar custom event names for O(1) lookup */
+const AEVATAR_EVENT_NAME_SET = new Set<string>(Object.values(AevatarEventNames));
+
+/** Legacy event names for backward compatibility */
+const LEGACY_EVENT_NAMES = [
   'aevatar.progress',
   'aevatar.graph',
   'aevatar.voting',
@@ -78,8 +83,11 @@ const AEVATAR_EVENT_NAMES = [
   'aevatar.consensus',
 ] as const;
 
+// Add legacy names to the set
+LEGACY_EVENT_NAMES.forEach(name => AEVATAR_EVENT_NAME_SET.add(name));
+
 function isAevatarEventName(name: string): name is AevatarCustomEventName {
-  return AEVATAR_EVENT_NAMES.includes(name as AevatarCustomEventName);
+  return AEVATAR_EVENT_NAME_SET.has(name);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

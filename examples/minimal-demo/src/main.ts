@@ -85,7 +85,8 @@ function handleEvent(event: AgUiEvent) {
       break;
       
     case 'TEXT_MESSAGE_CONTENT':
-      currentMessageContent += event.delta;
+      // Use 'delta' field for text content
+      currentMessageContent += (event as { delta: string }).delta;
       addMessage('assistant', currentMessageContent, true);
       break;
       
@@ -95,13 +96,31 @@ function handleEvent(event: AgUiEvent) {
       sendBtn.disabled = false;
       break;
       
+    case 'RUN_STARTED':
+      // Now includes threadId and runId
+      console.log('Run started:', (event as { runId: string; threadId: string }).runId);
+      break;
+      
     case 'RUN_FINISHED':
+      // Now includes threadId
+      console.log('Run finished:', (event as { runId: string; threadId: string }).runId);
       sendBtn.disabled = false;
       break;
       
     case 'RUN_ERROR':
-      console.error('Run error:', event.message);
+      // message is the primary field
+      console.error('Run error:', (event as { message: string }).message);
       sendBtn.disabled = false;
+      break;
+      
+    case 'STEP_STARTED':
+      // stepName is now required
+      console.log('Step started:', (event as { stepName: string }).stepName);
+      break;
+      
+    case 'STEP_FINISHED':
+      // stepName is now required
+      console.log('Step finished:', (event as { stepName: string }).stepName);
       break;
   }
 }

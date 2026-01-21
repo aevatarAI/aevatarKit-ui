@@ -11,6 +11,10 @@ export * from './progress';
 export * from './graph';
 export * from './voting';
 export * from './worker';
+export * from './pivot';
+export * from './agent-status';
+export * from './vibe-events';
+export * from './workflow';
 export * from './types';
 export * from './a2ui';
 

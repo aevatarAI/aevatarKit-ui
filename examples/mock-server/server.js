@@ -25,25 +25,27 @@ function generateId() {
 // AG-UI Event Generator
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function* generateAgUiEvents(runId, userMessage) {
-  const now = () => new Date().toISOString();
+async function* generateAgUiEvents(runId, userMessage, sessionId = 'session-default') {
+  const timestamp = () => Date.now();
+  const threadId = sessionId;
 
-  // 1. RUN_STARTED
+  // 1. RUN_STARTED (threadId required)
   yield {
     type: 'RUN_STARTED',
     runId,
-    timestamp: now(),
+    threadId,
+    timestamp: timestamp(),
   };
 
   await sleep(100);
 
-  // 2. TEXT_MESSAGE_START
-  const msgId = `msg-${generateId()}`;
+  // 2. TEXT_MESSAGE_START (role required)
+  const msgId = `msg:${threadId}:assistant:${runId}`;
   yield {
     type: 'TEXT_MESSAGE_START',
     messageId: msgId,
     role: 'assistant',
-    timestamp: now(),
+    timestamp: timestamp(),
   };
 
   await sleep(50);
@@ -56,7 +58,7 @@ async function* generateAgUiEvents(runId, userMessage) {
       type: 'TEXT_MESSAGE_CONTENT',
       messageId: msgId,
       delta: char,
-      timestamp: now(),
+      timestamp: timestamp(),
     };
     await sleep(20);
   }
@@ -67,39 +69,90 @@ async function* generateAgUiEvents(runId, userMessage) {
   yield {
     type: 'TEXT_MESSAGE_END',
     messageId: msgId,
-    timestamp: now(),
+    timestamp: timestamp(),
   };
 
   await sleep(50);
 
-  // 5. STEP events
-  const steps = ['Analyzing', 'Processing', 'Generating'];
+  // 5. STEP events (stepName required)
+  const steps = ['vibe.analyzing', 'vibe.processing', 'vibe.generating'];
   for (let i = 0; i < steps.length; i++) {
     yield {
       type: 'STEP_STARTED',
+      stepName: steps[i],
       stepId: `step-${i}`,
-      name: steps[i],
-      status: 'running',
-      timestamp: now(),
+      stepType: 'llm_call',
+      timestamp: timestamp(),
     };
 
     await sleep(300);
 
     yield {
       type: 'STEP_FINISHED',
+      stepName: steps[i],
       stepId: `step-${i}`,
-      name: steps[i],
-      status: 'completed',
-      timestamp: now(),
+      result: { success: true },
+      timestamp: timestamp(),
     };
   }
 
-  // 6. RUN_FINISHED
+  // 6. TOOL_CALL events (messageId required)
+  const toolMsgId = `msg:${threadId}:tool:${runId}`;
+  yield {
+    type: 'TOOL_CALL_START',
+    messageId: toolMsgId,
+    toolCallId: `tc-${generateId()}`,
+    toolName: 'search',
+    timestamp: timestamp(),
+  };
+
+  await sleep(200);
+
+  yield {
+    type: 'TOOL_CALL_RESULT',
+    messageId: toolMsgId,
+    toolCallId: `tc-${generateId()}`,
+    result: JSON.stringify({ found: true, results: ['item1', 'item2'] }),
+    timestamp: timestamp(),
+  };
+
+  yield {
+    type: 'TOOL_CALL_END',
+    messageId: toolMsgId,
+    toolCallId: `tc-${generateId()}`,
+    timestamp: timestamp(),
+  };
+
+  // 7. CUSTOM workflow event
+  yield {
+    type: 'CUSTOM',
+    name: 'aevatar.workflow.execution_event',
+    value: {
+      phase: 'reasoning',
+      nodeId: 'dag_consensus:decompose',
+      message: 'Processing reasoning step',
+      status: 'completed',
+      timestamp: timestamp(),
+      fields: {
+        status: 'completed',
+        progress: 1.0,
+        execution_id: runId,
+        workflow_name: 'demo',
+        step_type: 'llm_call',
+        tokens_used: 150,
+        llm_calls: 1,
+      },
+    },
+    timestamp: timestamp(),
+  };
+
+  // 8. RUN_FINISHED (threadId required)
   yield {
     type: 'RUN_FINISHED',
     runId,
-    status: 'completed',
-    timestamp: now(),
+    threadId,
+    result: { success: true },
+    timestamp: timestamp(),
   };
 }
 
@@ -180,7 +233,7 @@ const server = http.createServer(async (req, res) => {
       const streamInfo = sessions.get(`${sessionId}:stream`);
       if (streamInfo) {
         (async () => {
-          for await (const event of generateAgUiEvents(runId, content)) {
+          for await (const event of generateAgUiEvents(runId, content, sessionId)) {
             if (streamInfo.res.writableEnded) break;
             streamInfo.res.write(`data: ${JSON.stringify(event)}\n\n`);
           }
@@ -247,7 +300,7 @@ const server = http.createServer(async (req, res) => {
       if (streamInfo) {
         // Send events through SSE
         (async () => {
-          for await (const event of generateAgUiEvents(runId, content)) {
+          for await (const event of generateAgUiEvents(runId, content, sessionId)) {
             if (streamInfo.res.writableEnded) break;
             streamInfo.res.write(`data: ${JSON.stringify(event)}\n\n`);
           }
